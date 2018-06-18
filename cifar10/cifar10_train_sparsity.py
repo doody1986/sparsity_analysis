@@ -40,6 +40,10 @@ from datetime import datetime
 import time
 import collections
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.colors import ListedColormap
+from matplotlib.colors import BoundaryNorm
 
 import tensorflow as tf
 
@@ -58,14 +62,20 @@ tf.app.flags.DEFINE_integer('log_frequency', 100,
                             """How often to log results to the console.""")
 tf.app.flags.DEFINE_string('sparsity_dir', '/tmp/cifar10_sparsity',
                            """Directory where to write summaries""")
-tf.app.flags.DEFINE_integer('monitor_interval', 100,
+tf.app.flags.DEFINE_integer('monitor_interval', 10,
                            """The interval of monitoring sparsity""")
 tf.app.flags.DEFINE_float('sparsity_threshold', 0.6,
                            """The threshold of sparsity to enable monitoring""")
+tf.app.flags.DEFINE_boolean('log_animation', False,
+                           """Weather or not log the animation for tracking
+                           the change of spatial pattern""")
+tf.app.flags.DEFINE_integer('batch_idx', 0,
+                           """The batch index to extract the feature map""")
+
 def get_non_zero_index(a, shape):
   raw_index = np.where(a != 0)
   n_dim = len(raw_index)
-  assert n_dim == 4
+  assert n_dim == 4 or n_dim == 2
   n_data = len(raw_index[0])
   index_list = []
   size_chw = int(shape[1] * shape[2] * shape[3])
@@ -76,13 +86,42 @@ def get_non_zero_index(a, shape):
     index_list.append(index)
   return index_list
 
-def calc_index_diff_percentage(index_list, ref_index_list):
+def calc_index_diff_percentage(index_list, ref_index_list, sparsity, all_counts):
   percentage = 1.0
   n_idx = float(len(index_list))
+  n_ref_idx = float(len(ref_index_list))
+  #print("Current non-zero data size: ", len(index_list))
+  #print("Previous non-zero data size: ", len(ref_index_list))
   all_index = np.concatenate((index_list, ref_index_list), axis=0)
-  diff_counts = n_idx - (len(all_index) - len(np.unique(all_index, axis=0)))
-  percentage = float(diff_counts) / n_idx
+  #print("Merged non-zero data size: ", len(all_index))
+  #print("Unique non-zero data size: ", len(np.unique(all_index, axis=0)))
+  unchanged_counts = len(all_index) - len(np.unique(all_index, axis=0))
+  diff_counts = (n_idx - unchanged_counts) + (n_ref_idx - unchanged_counts)
+  #print("Differenct counts: ", diff_counts)
+  percentage = float(diff_counts) / all_counts
   return percentage
+
+def feature_map_extraction(tensor, batch_index, channel_index):
+  # The feature map returned will be represented in a context of matrix
+  # sparsity (1 or 0), in which 1 means non-zero value, 0 means zero
+  extracted_subarray = tensor[batch_index,:,:,channel_index]
+  extracted_subarray[np.nonzero(extracted_subarray)] = 1
+  return extracted_subarray
+
+# Store the data for visualization
+data_dict = collections.OrderedDict()
+# Block: zero Red: non-zero
+cmap = ListedColormap(['black', 'red'])
+fig, ax = plt.subplots()
+
+def animate(i, tensor_name):
+  global data_dict
+  label = 'Local step in monitoring period: {0}'.format(i)
+  matrix = data_dict[tensor_name][i]
+  mesh = ax.pcolormesh(matrix, cmap=cmap)
+  ax.set_xlabel(label)
+  return mesh,
+
 
 def train():
   """Train CIFAR-10 for a number of steps."""
@@ -140,13 +179,14 @@ def train():
           print (format_str % (datetime.now(), self._step, loss_value,
                                examples_per_sec, sec_per_batch))
 
+    # Experiment first, can't guarantee correctness in program logic
     class _SparsityHook(tf.train.SessionRunHook):
       """Logs loss and runtime."""
 
       def begin(self):
-       self._internal_data_keeper = collections.OrderedDict()
        self._internal_index_keeper = collections.OrderedDict()
-       self._local_step = 0
+       self._local_step = collections.OrderedDict()
+       #self._fig, self._ax = plt.subplots()
 
       def before_run(self, run_context):
         return tf.train.SessionRunArgs(retrieve_list)  # Asks for loss value.
@@ -154,8 +194,6 @@ def train():
       def after_run(self, run_context, run_values):
         self._data_list = []
         self._sparsity_list = []
-        if self._local_step >= FLAGS.monitor_interval:
-          return
         for i in range(len(run_values.results)):
           if i % 2 == 0:
             # tensor
@@ -166,29 +204,50 @@ def train():
         assert len(self._sparsity_list) == len(retrieve_list) / 2
         assert len(self._data_list) == len(retrieve_list) / 2
         num_data = len(self._data_list)
-        format_str = ('%s: sparsity = %.2f difference percentage = %.2f')
+        format_str = ('local_step: %d %s: sparsity = %.2f difference percentage = %.2f')
         for i in range(num_data):
           sparsity = self._sparsity_list[i]
           shape = retrieve_list[2*i].get_shape()
-          if self._local_step == 0 and sparsity > FLAGS.sparsity_threshold:
-            print (format_str % (retrieve_list[2*i].name,
-                                 sparsity, 0.0))
-            self._internal_data_keeper[retrieve_list[2*i].name] = self._data_list[i]
-            self._internal_index_keeper[retrieve_list[2*i].name] = get_non_zero_index(self._data_list[i], shape)
-          elif self._local_step > 0:
-            # Inside the monitoring interval
-            if retrieve_list[2*i].name not in self._internal_index_keeper:
+          tensor_name = retrieve_list[2*i].name
+          batch_idx = FLAGS.batch_idx
+          channel_idx = 0
+          if tensor_name in self._local_step:
+            if self._local_step[tensor_name] == FLAGS.monitor_interval and \
+               FLAGS.log_animation:
+              ani = animation.FuncAnimation(fig, animate, frames=FLAGS.monitor_interval,
+                                            fargs=(tensor_name,),
+                                            interval=500, repeat=False, blit=True)                        
+              
+              figure_name = tensor_name.replace('/', '_').replace(':', '_')
+              ani.save(figure_name+'.gif', dpi=80, writer='imagemagick')
+              self._local_step[tensor_name] += 1
               continue
-            self._internal_data_keeper[retrieve_list[2*i].name] = self._data_list[i]
+            if self._local_step[tensor_name] >= FLAGS.monitor_interval:
+              continue
+          if tensor_name not in self._local_step and sparsity > FLAGS.sparsity_threshold:
+            self._local_step[tensor_name] = 0
+            #print ("Shape: ", int(shape[0]), int(shape[1]), int(shape[2]), int(shape[3]))
+            print (format_str % (self._local_step[tensor_name], tensor_name,
+                                 sparsity, 0.0))
+            self._internal_index_keeper[tensor_name] = get_non_zero_index(self._data_list[i], shape)
+            if tensor_name not in data_dict:
+              data_dict[tensor_name] = []
+            data_dict[tensor_name].append(feature_map_extraction(self._data_list[i], batch_idx, channel_idx))
+            self._local_step[tensor_name] += 1
+          elif tensor_name in self._local_step and self._local_step[tensor_name] > 0:
+            # Inside the monitoring interval
+            #print ("Shape: ", int(shape[0]), int(shape[1]), int(shape[2]), int(shape[3]))
+            data_length = self._data_list[i].size
             local_index_list = get_non_zero_index(self._data_list[i], shape)
-            diff_percentage = calc_index_diff_percentage(local_index_list, self._internal_index_keeper[retrieve_list[2*i].name])
-            self._internal_index_keeper[retrieve_list[2*i].name] = local_index_list
-            print (format_str % (retrieve_list[2*i].name,
+            diff_percentage = calc_index_diff_percentage(local_index_list,
+              self._internal_index_keeper[tensor_name], sparsity, data_length)
+            self._internal_index_keeper[tensor_name] = local_index_list
+            print (format_str % (self._local_step[tensor_name], tensor_name,
                                  sparsity, diff_percentage))
+            data_dict[tensor_name].append(feature_map_extraction(self._data_list[i], batch_idx, channel_idx))
+            self._local_step[tensor_name] += 1
           else:
             continue
-
-        self._local_step += 1           
 
     sparsity_summary_op = tf.summary.merge_all()
     summary_writer = tf.summary.FileWriter(FLAGS.sparsity_dir, g)
