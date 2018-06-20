@@ -78,11 +78,17 @@ def get_non_zero_index(a, shape):
   assert n_dim == 4 or n_dim == 2
   n_data = len(raw_index[0])
   index_list = []
-  size_chw = int(shape[1] * shape[2] * shape[3])
-  size_hw = int(shape[2] * shape[3])
-  size_w = int(shape[3])
+  if n_dim == 4:
+    size_chw = shape[1].value * shape[2].value * shape[3].value
+    size_hw = shape[2].value * shape[3].value
+    size_w = shape[3].value
+  elif n_dim == 2:
+    size_c = shape[1].value
   for i in range(n_data):
-    index = raw_index[0][i] * size_chw + raw_index[1][i] * size_hw + raw_index[2][i] * size_w + raw_index[3][i]
+    if n_dim == 4:
+      index = raw_index[0][i] * size_chw + raw_index[1][i] * size_hw + raw_index[2][i] * size_w + raw_index[3][i]
+    elif n_dim == 2:
+      index = raw_index[0][i] * size_c + raw_index[1][i]
     index_list.append(index)
   return index_list
 
@@ -104,7 +110,11 @@ def calc_index_diff_percentage(index_list, ref_index_list, sparsity, all_counts)
 def feature_map_extraction(tensor, batch_index, channel_index):
   # The feature map returned will be represented in a context of matrix
   # sparsity (1 or 0), in which 1 means non-zero value, 0 means zero
-  extracted_subarray = tensor[batch_index,:,:,channel_index]
+  n_dim = len(tensor.shape)
+  if n_dim == 4:
+    extracted_subarray = tensor[batch_index,:,:,channel_index]
+  if n_dim == 2:
+    extracted_subarray = tensor
   extracted_subarray[np.nonzero(extracted_subarray)] = 1
   return extracted_subarray
 
@@ -226,7 +236,6 @@ def train():
               continue
           if tensor_name not in self._local_step and sparsity > FLAGS.sparsity_threshold:
             self._local_step[tensor_name] = 0
-            #print ("Shape: ", int(shape[0]), int(shape[1]), int(shape[2]), int(shape[3]))
             print (format_str % (self._local_step[tensor_name], tensor_name,
                                  sparsity, 0.0))
             self._internal_index_keeper[tensor_name] = get_non_zero_index(self._data_list[i], shape)
@@ -236,7 +245,6 @@ def train():
             self._local_step[tensor_name] += 1
           elif tensor_name in self._local_step and self._local_step[tensor_name] > 0:
             # Inside the monitoring interval
-            #print ("Shape: ", int(shape[0]), int(shape[1]), int(shape[2]), int(shape[3]))
             data_length = self._data_list[i].size
             local_index_list = get_non_zero_index(self._data_list[i], shape)
             diff_percentage = calc_index_diff_percentage(local_index_list,
