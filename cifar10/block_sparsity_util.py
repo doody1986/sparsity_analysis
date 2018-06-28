@@ -26,16 +26,20 @@ class BlockSparsityUtil:
   def zero_block_ratio_matrix(self, a, shape):
     '''
     Args:
-      a: input matrix (2D-tensor), a numpy array
+      a: a numpy n-d array (tensor)
       shape: the tensor shape
     Return:
       The count of zero blocks
     '''
     n_dim = len(shape)
-    if n_dim != 2:
-      return 0
-    n_row = shape[0].value
-    n_col = shape[1].value
+    if n_dim == 2:
+      n_row = shape[0].value
+      n_col = shape[1].value
+      matrix = a
+    elif n_dim == 4:
+      n_row = shape[0].value
+      n_col = shape[1].value * shape[2].value * shape[3].value
+      matrix = a.reshape((n_row, n_col))
     n_block_row = int(n_row + self._block_size - 1) / int(self._block_size)
     n_block_col = int(n_col + self._block_size - 1) / int(self._block_size)
 
@@ -53,10 +57,10 @@ class BlockSparsityUtil:
     if n_padded_zeros_in_row != 0 or n_padded_zeros_in_col != 0:
       padded_zeros_in_row = np.zeros((n_padded_zeros_in_row, n_col))
       padded_zeros_in_col = np.zeros((n_row+n_padded_zeros_in_row, n_padded_zeros_in_col))
-      padded_a = np.concatenate((np.concatenate((a, padded_zeros_in_row), axis=0),\
+      padded_a = np.concatenate((np.concatenate((matrix, padded_zeros_in_row), axis=0),\
                   padded_zeros_in_col), axis=1)
     else:
-      padded_a = a
+      padded_a = matrix
 
     # Reshape the tensor column-wise first
     reshaped_a = padded_a.reshape((n_block_row, self._block_size, n_col))

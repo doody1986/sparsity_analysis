@@ -240,10 +240,8 @@ def train():
               continue
           if tensor_name not in self._local_step and sparsity > FLAGS.sparsity_threshold:
             self._local_step[tensor_name] = 0
-            # Hack for fully connected layer only
-            if "local" in tensor_name:
-              zero_block_ratio = self._bs_util.zero_block_ratio_matrix(self._data_list[i], shape)
-              print(zero_block_format_str % (self._local_step[tensor_name], tensor_name, zero_block_ratio))
+            zero_block_ratio = self._bs_util.zero_block_ratio_matrix(self._data_list[i], shape)
+            print(zero_block_format_str % (self._local_step[tensor_name], tensor_name, zero_block_ratio))
             print (format_str % (self._local_step[tensor_name], tensor_name,
                                  sparsity, 0.0))
             self._internal_index_keeper[tensor_name] = get_non_zero_index(self._data_list[i], shape)
@@ -253,9 +251,8 @@ def train():
             self._local_step[tensor_name] += 1
           elif tensor_name in self._local_step and self._local_step[tensor_name] > 0:
             # Inside the monitoring interval
-            if "local" in tensor_name:
-              zero_block_ratio = self._bs_util.zero_block_ratio_matrix(self._data_list[i], shape)
-              print(zero_block_format_str % (self._local_step[tensor_name], tensor_name, zero_block_ratio))
+            zero_block_ratio = self._bs_util.zero_block_ratio_matrix(self._data_list[i], shape)
+            print(zero_block_format_str % (self._local_step[tensor_name], tensor_name, zero_block_ratio))
             data_length = self._data_list[i].size
             local_index_list = get_non_zero_index(self._data_list[i], shape)
             diff_percentage = calc_index_diff_percentage(local_index_list,
