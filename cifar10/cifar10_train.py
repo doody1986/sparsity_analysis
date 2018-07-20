@@ -48,7 +48,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 1000000,
+tf.app.flags.DEFINE_integer('max_steps', 1000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
@@ -69,14 +69,15 @@ def train():
 
     # Build a Graph that computes the logits predictions from the
     # inference model.
-    logits = cifar10.inference(images)
+    tensor_list,_ = cifar10.inference(images)
+    logits = tensor_list[0]
 
     # Calculate loss.
     loss = cifar10.loss(logits, labels)
 
     # Build a Graph that trains the model with one batch of examples and
     # updates the model parameters.
-    train_op = cifar10.train(loss, global_step)
+    train_op, _ = cifar10.train(loss, tensor_list, global_step)
 
     class _LoggerHook(tf.train.SessionRunHook):
       """Logs loss and runtime."""
@@ -104,6 +105,7 @@ def train():
           print (format_str % (datetime.now(), self._step, loss_value,
                                examples_per_sec, sec_per_batch))
 
+    start = time.time()
     with tf.train.MonitoredTrainingSession(
         checkpoint_dir=FLAGS.train_dir,
         hooks=[tf.train.StopAtStepHook(last_step=FLAGS.max_steps),
@@ -113,6 +115,8 @@ def train():
             log_device_placement=FLAGS.log_device_placement)) as mon_sess:
       while not mon_sess.should_stop():
         mon_sess.run(train_op)
+    end = time.time()
+    print (end - start)
 
 
 def main(argv=None):  # pylint: disable=unused-argument
