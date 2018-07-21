@@ -17,11 +17,17 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import tensorflow as tf
-import sparsity_utility
+import sparsity_util
 
-class ModelInfo:
-  def __init__(self, global_step):
-    self._global_step = global_step
+import numpy as np
+import collections
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.colors import ListedColormap
+from matplotlib.colors import BoundaryNorm
+import os.path
+from enum import Enum
+
 
 class Mode(Enum):
   monitor = 0
@@ -42,33 +48,32 @@ class SparseStage(Enum):
 class MonitoredTensorInfo:
   def __init__(self):
     self._sparsity = -1.0
-    self._zero_block_ratio = 0.0
-    self._non_zero_data_indices = []
+    self._zero_block_ratio = -1.0
     self._local_step = 0
     self._extracted_data_list = []
     self._fd = None
+    self._results_str = "Monitor session finished: global step: %d\nStatus: %s\nSparsity stage: %s\nAveraged sparsity = %.2f\nAveraged zero block ratio = %.2f\n"
     self._enabled = False
+
     self._data_tensor = None
     self._sparsity_tensor = None
-
-    self._previous_sparsity = -1.0
+    self._zero_block_size = 2
+    self._sparsity_history = []
     self._stage = SparseStage.dense
-    self._monitor_period_counts = 0
+    self._monitor_period = 0
 
-  def reset()
+  def reset(self):
     self._sparsity = -1.0
-    self._zero_block_ratio = 0.0
-    self._non_zero_data_indices = []
+    self._zero_block_ratio = -1.0
     self._local_step = 0
     self._extracted_data_list = []
     self._fd = None
+    self._results_str = "Monitor session finished: global step: %d\nStatus: %s\nSparsity stage: %s\nAveraged sparsity = %.2f\nAveraged zero block ratio = %.2f\n"
     self._enabled = False
-    self._data_tensor = None
-    self._sparsity_tensor = None
 
 class SparsityMonitor:
-  def __init__(self, mode, data_fromat,
-               monitor_interval, monitor_period,
+  def __init__(self, mode, data_format,
+               monitor_interval, initial_monitor_period,
                retrieved_tensor_list):
     self._can_hibernate = False
     self._mode = mode 
@@ -76,23 +81,22 @@ class SparsityMonitor:
     # The interval within which every iteration is used for monitoring sparsity
     self._monitor_interval = monitor_interval
     # The period of initiating one monitoring session
-    self._initial_monitor_period = monitor_period
-    self._monitor_period = self._initial_monitor_period
+    self._initial_monitor_period = initial_monitor_period
 
     # Fixed parameter during running
-    self._monitor_period_incremental = 1000
-    self._incremental_counts = 0
-    self._incremental_times = 10
     self._monitor_period_multiple = 2
+    self._monitor_sparsity_history_length = 10
+    self._monitor_cond_sparsity_difference = 0.05
     self._hibernation_period = 10000
-    self._hibernation_cond_sparsity_difference = 0.01
-    self._hibernation_cond_n_period = 5
+    self._hibernation_sparsity_history_length = 3
+    self._hibernation_cond_sparsity_difference = 0.1
+    self._hibernation_sparsity_history_length = 10
     self._initial_sparsity = 0.6
     self._sparsity_threshold_list = np.arange(self._initial_sparsity, 1, 0.1)
     self._first_sparse_stage_idx = 0
     self._second_sparse_stage_idx = 1
     self._third_sparse_stage_idx = 2
-    self._forth_sparse_stage_idx = 3
+    self._fourth_sparse_stage_idx = 3
 
     # Initial status
     self._status = Status.active
@@ -107,6 +111,7 @@ class SparsityMonitor:
       self._sparsity_info.append(MonitoredTensorInfo())
       self._sparsity_info[-1]._data_tensor = tensor_tuple[0]
       self._sparsity_info[-1]._sparsity_tensor = tensor_tuple[1]
+      self._sparsity_info[-1]._monitor_period = self._initial_monitor_period
     self._num_sparsity_info = len(self._sparsity_info)
 
   def update_stage(self, tensor_idx):
@@ -125,12 +130,125 @@ class SparsityMonitor:
     else:
       self._sparsity_info[tensor_idx]._stage = SparseStage.invalid_stage
 
-  def update_sparsity_history(self, tensor_idx, history_length):
+  def update_history(self, tensor_idx):
+    # The tensor idx will always index a tensor enabling monitor
+    current_history_length = len(self._sparsity_info[tensor_idx]._sparsity_history)
+    # Get the right history length
+    if self._status == Status.active:
+      history_length = self._monitor_sparsity_history_length
+    elif self._status == Status.hibernate:
+      history_lenrth = self._hibernation_sparsity_history_length
+    if current_history_length == history_length:
+      self._sparsity_info[tensor_idx]._sparsity_history.pop(0)
+    self._sparsity_info[tensor_idx]._sparsity_history.append(self._sparsity_info[tensor_idx]._sparsity)
 
-  def adjust_monitor_period(self):
-    
+  def adjust_monitor_period(self, tensor_idx):
+    # The tensor idx will always index a tensor enabling monitor
+    current_history_length = len(self._sparsity_info[tensor_idx]._sparsity_history)
+    history_length = self._monitor_sparsity_history_length
+    if current_history_length == history_length:
+      #enable the dynamic monitor period adjustment after N monitor period
+      sparsity_diff = abs(self._sparsity_info[tensor_idx].sparisty -\
+                          self._sparsity_info[tensor_idx]._sparsity_history[0])
+      # Only times the monitor period when condition is met and it is smaller
+      # than the hibernation period
+      if sparsity_diff < self._monitor_cond_sparsity_difference and \
+          self._sparsity_info[tensor_idx]._monitor_period < self._hibernation_period:
+        self._sparsity_info[tensor_idx]._monitor_period = \
+            self._sparsity_info[tensor_idx]._monitor_period * self._monitor_period_multiple 
+        
+  def check_hibernation(self):
+    assert self._can_hibernate == False
+    hibernation_ready_count = 0
+    for i in range(self._num_sparsity_info):
+      next_possible_monitor_period = self._sparsity_info[i]._monitor_period * self._monitor_period_multiple
+      if next_possible_monitor_period > self._hibernation_period:
+        hibernation_ready_count += 1
+    if hibernation_ready_count == self._num_sparsity_info:
+      self._can_hibernate = True
 
-  def scheduler_before(self, model_info):
+  def check_active(self):
+    assert self._can_hibernate == True
+    current_history_length = len(self._sparsity_info[tensor_idx]._sparsity_history)
+    history_lenrth = self._hibernation_sparsity_history_length
+    for i in range(self._num_sparsity_info):
+      if current_history_length == history_length:
+        sparsity_diff = abs(self._sparsity_info[i].sparisty -\
+                            self._sparsity_info[i]._sparsity_history[0])
+        # When detecting severe sparsity change
+        if sparsity_diff > self._hibernation_cond_sparsity_difference:
+          self._can_hibernate = False
+          break
+
+  def update_results(self, global_step, tensor_idx):
+    stage = self._sparsity_info[tensor_idx]._stage
+    if stage == SparseStage.first_stage:
+      stage_str = "first"
+    elif stage == SparseStage.second_stage:
+      stage_str = "second"
+    elif stage == SparseStage.third_stage:
+      stage_str = "third"
+    elif stage == SparseStage.fourth_stage:
+      stage_str = "fourth"
+    else:
+      return
+
+    if self._status == Status.hibernate:
+      status_str = "hibernation"
+    elif self._status == Status.active:
+      status_str = "active"
+
+    sparsity = self._sparsity_info[tensor_idx]._sparsity
+    ratio = self._sparsity_info[tensor_idx]._zero_block_ratio
+
+    self._sparsity_info[tensor_idx]._results_str = (self._sparsity_info[tensor_idx]._results_str %\
+                                                   (global_step, status_str, stage_str, sparsity, ratio))
+
+  def animate(self, i, ax, data_dict):
+    cmap = ListedColormap(['black', 'red'])
+    label = 'Local step in monitoring period: {0}'.format(i)
+    matrix = data_dict[i] 
+    mesh = ax.pcolormesh(matrix, cmap=cmap)
+    ax.set_xlabel(label)
+    return mesh,
+
+  def results_io(self, tensor_idx, workpath, enable_file_io):
+    stage = self._sparsity_info[tensor_idx]._stage
+    if stage == SparseStage.first_stage:
+      stage_str = "first"
+    elif stage == SparseStage.second_stage:
+      stage_str = "second"
+    elif stage == SparseStage.third_stage:
+      stage_str = "third"
+    elif stage == SparseStage.fourth_stage:
+      stage_str = "fourth"
+    else:
+      return
+
+    if enable_file_io:
+      # Output results
+      tensor_name = self._sparsity_info[tensor_idx]._data_tensor.name
+      file_name = tensor_name.replace('/', '_').replace(':', '_') + '.txt'
+      self._sparsity_info[tensor_idx]._fd = open(workpath+file_name, 'a')
+      self._sparsity_info[tensor_idx]._fd.write(self._sparsity_info[tensor_idx]._results_str)
+      self._sparsity_info[tensor_idx]._fd.close()
+
+      # Plot the data pattern
+      figure_name = tensor_name.replace('/', '_').replace(':', '_') +\
+                    stage_str
+
+      if not os.path.isfile(figure_name):
+        fig, ax = plt.subplots()
+        ani = animation.FuncAnimation(fig, animate, frames=self._monitor_interval,
+                                      fargs=(ax, self._sparsity_info[tensor_idx]._extracted_data,),
+                                      interval=500, repeat=False, blit=True)                        
+        
+        ani.save(workpath+figure_name+'.gif', dpi=80, writer='imagemagick')
+        plt.close('all')
+    else:
+      print (self._sparsity_info[tensor_idx]._results_str)
+
+  def scheduler_before(self, global_step):
     # Manage the status
     if self._can_hibernate:
       self._status = Status.hibernation
@@ -139,116 +257,110 @@ class SparsityMonitor:
 
     # Schedule the sparsity monitor
     if self._status == Status.active:
-      if model_info._global_step % self._monitor_period == 0:
-        for i in range(self._num_sparsity_info):
+      for i in range(self._num_sparsity_info):
+        if global_step % self._sparsity_info[i]._monitor_period == 0:
           self._sparsity_info[i]._enabled = True
     elif self._status == Status.hibernate:
-      if model_info._global_step % self._hibernation_period == 0:
+      if global_step % self._hibernation_period == 0:
         for i in range(self._num_sparsity_info):
           self._sparsity_info[i]._enabled = True
 
-    self._monitor_enabled_tensor = []
+    self._monitor_enabled_tensor_list = []
+    self._monitor_enabled_tensor_id_list = []
     for i in range(self._num_sparsity_info):
       if self._sparsity_info[i]._enabled:
         self._monitor_enabled_tensor_list.append(self._sparsity_info[i]._data_tensor)
         self._monitor_enabled_tensor_list.append(self._sparsity_info[i]._sparsity_tensor)
+        self._monitor_enabled_tensor_id_list.append(i)
 
     # Return the data list that needed for monitoring
-    return self._monitor_enabled_tensor
+    return self._monitor_enabled_tensor_list
 
-  def scheduler_after(value_list, work_path="", enable_file_io=False):
-    all_disabled = True
+  def scheduler_after(self, value_list, global_step, workpath="", enable_file_io=False):
+    # Time CONSUMING part is here
+    if self._mode == Mode.monitor:
+      self.__collect_and_monitoring(value_list)
+
     for i in range(self._num_sparsity_info):
-      if !self._sparsity_info[i]_enabled:
+      if not self._sparsity_info[i]._enabled:
         continue
-      all_diabled = False
-      # Time consuming part is here
-      if self._mode == Mode.monitor:
-        __collect_and_monitoring(value_list)
 
-    if all_disabled:
-      return
-    # post processing of scheduler parameters
-    if self._status == Status.active:
-      for i in range(self._num_sparsity_info):
-        if !self._sparsity_info[i]_enabled:
-          continue
-        # Turn off the monitoring
-        if self._sparsity_info[i]._local_count == self._monitor_interval:
-          self._sparsity_info[i]._enabled = False
-          self._sparsity_info[i]._monitor_period_counts += 1
-          # Update the sparsity history based on configured history length
-          # Update the sparsity stage of corresponding data
-          self.update_stage(i)
-          # Adjust the monitor period
-          self.adjust_monitor_period()
+      # post processing of scheduler parameters
+      # Turn off the monitoring
+      if self._sparsity_info[i]._local_step == self._monitor_interval:
+        self._sparsity_info[i]._enabled = False
 
-          # Call file IO utility here TBD
+        # Update the sparsity history based on configured history length
+        self.update_history(i)
 
-          self._sparsity_info[i].reset()
-        elif self._sparsity_info[i]._local_count == 0 and self._sparsity_info[i]._sparsity < 0:
-          # The sparsity is too small to be recorded
-          self._sparsity_info[i].reset()
-          self._sparsity_info[i]._enabled = False
+        # Update the sparsity stage of corresponding data
+        self.update_stage(i)
 
-    elif self._status == Status.hibernate:
+        # Adjust the monitor period
+        if self._status == Status.active:
+          self.adjust_monitor_period(i)
 
-  def __collect_and_monitoring(value_list, work_path, enable_file_io):
-    for i in range(len(value_list)):
-      if i % 2 == 0:
-        # data 
-        self._data_list.append(value_list[i])
-      if i % 2 == 1:
-        # sparsity
-        self._sparsity_list.append(value_list[i])
-    assert len(self._sparsity_list) == len(value_list) / 2
-    assert len(self._data_list) == len(value_list) / 2
-    num_data = len(self._data_list)
-    format_str = ('local_step: %d %s: sparsity = %.2f difference percentage = %.2f')
-    zero_block_format_str = ('local_step: %d %s: zero block ratio = %.2f')
-    for i in range(num_data):
-      shape = retrieved_tensor_list[2*i].get_shape()
-      tensor = retrieved_tensor_list[2*i]
-      self._sparsity_info[tensor]._sparsity = self._sparsity_list[i]
+        # Status transition
+        if self._status == Status.active:
+          self.check_hibernation()
+        elif self._status == Status.hibernation:
+          self.check_active()
+
+        # Call file IO utility here
+        self.update_results(global_step, i)
+        self.results_io(i, workpath, enable_file_io)
+
+        # Reset the sparsity info for next period
+        self._sparsity_info[i].reset()
+      elif self._sparsity_info[i]._local_step == 0 and self._sparsity_info[i]._sparsity < 0:
+        # The sparsity is too small to be recorded
+        self._sparsity_info[i].reset()
+        self._sparsity_info[i]._enabled = False
+
+  def __collect_and_monitoring(self, value_list):
+    num_selected_tensor = len(self._monitor_enabled_tensor_id_list)
+    assert num_selected_tensor == len(value_list)/2
+    for tensor_id, i in zip(self._monitor_enabled_tensor_id_list, range(num_selected_tensor)):
+      # indices
+      data_idx = i * 2
+      sparsity_idx = i * 2 + 1
+      current_data = value_list[data_idx]
+      current_sparsity = value_list[sparsity_idx]
+      shape = self._sparsity_info[tensor_id]._data_tensor.get_shape()
+      tensor = self._sparsity_info[tensor_id]._data_tensor
       batch_idx = 0
       channel_idx = 0
-      if self._sparsity_info[tensor_name]._local_step == self._monitor_interval and \
-         enable_file_io:
-        #fig, ax = plt.subplots()
-        #ani = animation.FuncAnimation(fig, animate, frames=FLAGS.monitor_interval,
-        #                              fargs=(ax, tensor_name,),
-        #                              interval=500, repeat=False, blit=True)                        
-        #
-        #figure_name = tensor_name.replace('/', '_').replace(':', '_')
-        #ani.save(figure_name+'.gif', dpi=80, writer='imagemagick')
-        self._sparsity_info[tensor_name]._local_step += 1
-        continue
-      if self._local_step[tensor_name] >= self._monitor_interval:
-        continue
-      if self._sparsity_info[tensor_name]._local_step == 0 and sparsity > FLAGS.sparsity_threshold:
-        zero_block_ratio = self._bs_util.zero_block_ratio_matrix(self._data_list[i], shape)
-        print(zero_block_format_str % (self._local_step[tensor_name], tensor_name, zero_block_ratio))
-        print (format_str % (self._local_step[tensor_name], tensor_name,
-                             sparsity, 0.0))
-        self._internal_index_keeper[tensor_name] = get_non_zero_index(self._data_list[i], shape)
-        if tensor_name not in data_dict:
-          data_dict[tensor_name] = []
-        data_dict[tensor_name].append(feature_map_extraction(self._data_list[i], batch_idx, channel_idx))
-        self._local_step[tensor_name] += 1
-      elif tensor_name in self._local_step and self._local_step[tensor_name] > 0:
-        # Inside the monitoring interval
-        zero_block_ratio = self._bs_util.zero_block_ratio_matrix(self._data_list[i], shape)
-        print(zero_block_format_str % (self._local_step[tensor_name], tensor_name, zero_block_ratio))
-        data_length = self._data_list[i].size
-        local_index_list = get_non_zero_index(self._data_list[i], shape)
-        diff_percentage = calc_index_diff_percentage(local_index_list,
-          self._internal_index_keeper[tensor_name], sparsity, data_length)
-        self._internal_index_keeper[tensor_name] = local_index_list
-        print (format_str % (self._local_step[tensor_name], tensor_name,
-                             sparsity, diff_percentage))
-        data_dict[tensor_name].append(feature_map_extraction(self._data_list[i], batch_idx, channel_idx))
-        self._local_step[tensor_name] += 1
+      stage = self._sparsity_info[tensor_id]._stage
+      if stage == SparseStage.dense:
+        sparsity_threshold = 0.6
+      elif stage == SparseStage.first_stage:
+        sparsity_threshold = 0.7
+      elif stage == SparseStage.second_stage:
+        sparsity_threshold = 0.8
+      elif stage == SparseStage.third_stage or stage == Stage.fourth_stage:
+        sparsity_threshold = 0.9
+
+      if (self._sparsity_info[tensor_id]._local_step == 0 and current_sparsity > sparsity_threshold)\
+          or self._sparsity_info[tensor_id]._local_step > 0:
+        if self._sparsity_info[tensor_id]._sparsity < 0:
+          # The first iteration within the monitor interval
+          self._sparsity_info[tensor_id]._sparsity = current_sparsity
+        else:
+          # Calculate the moving average
+          self._sparsity_info[tensor_id]._sparsity = self._sparsity_info[tensor_id]._sparsity * 0.9 + current_sparsity * 0.1
+
+        block_size = self._sparsity_info[tensor_id]._zero_block_size
+        zero_block_ratio = sparsity_util.zero_block_ratio_matrix(current_data, shape, block_size)
+        if self._sparsity_info[tensor_id]._zero_block_ratio < 0:
+          # The first iteration within the monitor interval
+          self._sparsity_info[tensor_id]._zero_block_ratio = zero_block_ratio
+        else:
+          # Calculate the moving average
+          self._sparsity_info[tensor_id]._zero_block_ratio = self._sparsity_info[tensor_id]._zero_block_ratio * 0.9 + zero_block_ratio * 0.1
+
+        self._sparsity_info[tensor_id]._extracted_data_list.append(
+          sparsity_util.feature_map_extraction(current_data, self._data_format, batch_idx, channel_idx))
+        self._sparsity_info[tensor_id]._local_step += 1
       else:
         continue
-  def __metric_calculator()
     

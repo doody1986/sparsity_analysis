@@ -45,6 +45,7 @@ from six.moves import urllib
 import tensorflow as tf
 
 import cifar10_input
+import sparsity_util
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -76,49 +77,6 @@ TOWER_NAME = 'tower'
 
 DATA_URL = 'https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz'
 
-def _activation_summary(x):
-  """Helper to create summaries for activations.
-
-  Creates a summary that provides a histogram of activations.
-  Creates a summary that measures the sparsity of activations.
-
-  Args:
-    x: Tensor
-  Returns:
-    The sparsity of the tensor
-  """
-  # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
-  # session. This helps the clarity of presentation on tensorboard.
-  tensor_name = re.sub('%s_[0-9]*/' % TOWER_NAME, '', x.op.name)
-  sparsity = tf.nn.zero_fraction(x)
-  tf.summary.scalar(tensor_name + '/sparsity', sparsity)
-  return sparsity
-
-def _gradient_summary(loss, x_list):
-  """Helper to create summaries for gradients of intermediate results in backward pass.
-
-  Creates a summary that measures the sparsity of gradients of intermediate results in backward pass.
-
-  Args:
-    loss: the loss
-    x_list: a list of Tensors
-  Returns:
-    A list of sparsity
-  """
-  gradient_list = tf.gradients(loss, x_list)
-  sparsity_list = []
-  for g in gradient_list:
-    # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
-    # session. This helps the clarity of presentation on tensorboard.
-    tensor_name = re.sub('%s_[0-9]*/' % TOWER_NAME, '', g.op.name)
-    sparsity = tf.nn.zero_fraction(g)
-    tf.summary.scalar(tensor_name + '/sparsity', sparsity)
-    sparsity_list.append(sparsity)
-  grad_retrieve_list = []
-  for i in range(len(gradient_list)):
-    grad_retrieve_list.append(gradient_list[i])
-    grad_retrieve_list.append(sparsity_list[i])
-  return grad_retrieve_list
 
 def _variable_on_cpu(name, shape, initializer):
   """Helper to create a Variable stored on CPU memory.
@@ -219,7 +177,7 @@ def inference(images):
   Returns:
     Logits.
   """
-  sparsities = collections.OrderedDict()
+  monitored_tensor_list = []
   # We instantiate all variables using tf.get_variable() instead of
   # tf.Variable() in order to share variables across multiple GPU training runs.
   # If we only ran this model on a single GPU, we could simplify this function
@@ -235,13 +193,12 @@ def inference(images):
     biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.0))
     pre_activation = tf.nn.bias_add(conv, biases)
     conv1 = tf.nn.relu(pre_activation, name="relu")
-    sparsities[conv1] = _activation_summary(conv1)
-    _activation_summary(kernel)
-    _activation_summary(biases)
+    monitored_tensor_list.append(conv1)
 
   # pool1
   pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
                          padding='SAME', name='pool1')
+  monitored_tensor_list.append(pool1)
   # norm1
   norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
                     name='norm1')
@@ -256,9 +213,7 @@ def inference(images):
     biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
     pre_activation = tf.nn.bias_add(conv, biases)
     conv2 = tf.nn.relu(pre_activation, name="relu")
-    sparsities[conv2] = _activation_summary(conv2)
-    _activation_summary(kernel)
-    _activation_summary(biases)
+    monitored_tensor_list.append(conv2)
 
   # norm2
   norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
@@ -266,6 +221,7 @@ def inference(images):
   # pool2
   pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1],
                          strides=[1, 2, 2, 1], padding='SAME', name='pool2')
+  monitored_tensor_list.append(pool2)
 
   # local3
   with tf.variable_scope('local3') as scope:
@@ -276,9 +232,8 @@ def inference(images):
                                           stddev=0.04, wd=0.004)
     biases = _variable_on_cpu('biases', [384], tf.constant_initializer(0.1))
     local3 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name="relu")
-    sparsities[local3] = _activation_summary(local3)
-    _activation_summary(weights)
-    _activation_summary(biases)
+    monitored_tensor_list.append(local3)
+    
 
   # local4
   with tf.variable_scope('local4') as scope:
@@ -286,9 +241,7 @@ def inference(images):
                                           stddev=0.04, wd=0.004)
     biases = _variable_on_cpu('biases', [192], tf.constant_initializer(0.1))
     local4 = tf.nn.relu(tf.matmul(local3, weights) + biases, name="relu")
-    sparsities[local4] = _activation_summary(local4)
-    _activation_summary(weights)
-    _activation_summary(biases)
+    monitored_tensor_list.append(local4)
 
   # linear layer(WX + b),
   # We don't apply softmax here because
@@ -300,13 +253,8 @@ def inference(images):
     biases = _variable_on_cpu('biases', [NUM_CLASSES],
                               tf.constant_initializer(0.0))
     softmax_linear = tf.add(tf.matmul(local4, weights), biases, name="output")
-    sparsities[softmax_linear] = _activation_summary(softmax_linear)
-    _activation_summary(weights)
-    _activation_summary(biases)
 
-  tensor_list = [softmax_linear, local4, local3, conv2, conv1]
-
-  return tensor_list, sparsities
+  return softmax_linear, monitored_tensor_list
 
 
 def loss(logits, labels):
@@ -374,7 +322,9 @@ def train(total_loss, tensor_list, global_step):
     train_op: op for training.
   """
 
-  grad_retrieve_list = _gradient_summary(total_loss, tensor_list)
+  retrieve_list = sparsity_util.sparsity_hook_forward(tensor_list)
+  grad_retrieve_list = sparsity_util.sparsity_hook_backward(total_loss, tensor_list)
+  retrieve_list = retrieve_list + grad_retrieve_list
   # Variables that affect learning rate.
   num_batches_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / FLAGS.batch_size
   decay_steps = int(num_batches_per_epoch * NUM_EPOCHS_PER_DECAY)
@@ -413,7 +363,7 @@ def train(total_loss, tensor_list, global_step):
   with tf.control_dependencies([apply_gradient_op]):
     variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
-  return variables_averages_op, grad_retrieve_list
+  return variables_averages_op, retrieve_list
 
 
 def maybe_download_and_extract():
