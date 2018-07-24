@@ -148,22 +148,14 @@ def train():
 
     # Build a Graph that computes the logits predictions from the
     # inference model.
-    tensor_list, sparsities = cifar10.inference(images)
-    logits = tensor_list[0]
-
-    #Build a new tensor list with both tensor and sparsities
-    retrieve_list = []
-    for key in sparsities:
-      retrieve_list.append(key)
-      retrieve_list.append(sparsities[key])
+    logits, tensor_list = cifar10.inference(images)
 
     # Calculate loss.
     loss = cifar10.loss(logits, labels)
 
     # Build a Graph that trains the model with one batch of examples and
     # updates the model parameters.
-    train_op, grad_retrieve_list = cifar10.train(loss, tensor_list, global_step)
-    retrieve_list = retrieve_list + grad_retrieve_list
+    train_op, retrieve_list = cifar10.train(loss, tensor_list, global_step)
 
     class _LoggerHook(tf.train.SessionRunHook):
       """Logs loss and runtime."""
@@ -201,7 +193,11 @@ def train():
        #self._fig, self._ax = plt.subplots()
 
       def before_run(self, run_context):
-        return tf.train.SessionRunArgs(retrieve_list)  # Asks for loss value.
+        self.selected_list = []
+        for tensor_tuple in retrieve_list:
+          self.selected_list.append(tensor_tuple[0])
+          self.selected_list.append(tensor_tuple[1])
+        return tf.train.SessionRunArgs(self.selected_list)  # Asks for loss value.
 
       def after_run(self, run_context, run_values):
         self._data_list = []
@@ -213,17 +209,17 @@ def train():
           if i % 2 == 1:
             # sparsity
             self._sparsity_list.append(run_values.results[i])
-        assert len(self._sparsity_list) == len(retrieve_list) / 2
-        assert len(self._data_list) == len(retrieve_list) / 2
+        assert len(self._sparsity_list) == len(self.selected_list) / 2
+        assert len(self._data_list) == len(self.selected_list) / 2
         num_data = len(self._data_list)
         format_str = ('local_step: %d %s: sparsity = %.2f difference percentage = %.2f')
         zero_block_format_str = ('local_step: %d %s: zero block ratio = %.2f')
         for i in range(num_data):
           sparsity = self._sparsity_list[i]
-          shape = retrieve_list[2*i].get_shape()
-          tensor_name = retrieve_list[2*i].name
-          batch_idx = FLAGS.batch_idx
-          channel_idx = int(shape[-1]) - 1
+          shape = self.selected_list[2*i].get_shape()
+          tensor_name = self.selected_list[2*i].name
+          batch_idx = 0
+          channel_idx = 0
           if tensor_name in self._local_step:
             if self._local_step[tensor_name] == FLAGS.monitor_interval and \
                FLAGS.log_animation:
@@ -254,12 +250,13 @@ def train():
             zero_block_ratio = self._bs_util.zero_block_ratio_matrix(self._data_list[i], shape)
             print(zero_block_format_str % (self._local_step[tensor_name], tensor_name, zero_block_ratio))
             data_length = self._data_list[i].size
-            local_index_list = get_non_zero_index(self._data_list[i], shape)
-            diff_percentage = calc_index_diff_percentage(local_index_list,
-              self._internal_index_keeper[tensor_name], sparsity, data_length)
-            self._internal_index_keeper[tensor_name] = local_index_list
+            #local_index_list = get_non_zero_index(self._data_list[i], shape)
+            #diff_percentage = calc_index_diff_percentage(local_index_list,
+            #  self._internal_index_keeper[tensor_name], sparsity, data_length)
+            #self._internal_index_keeper[tensor_name] = local_index_list
             print (format_str % (self._local_step[tensor_name], tensor_name,
-                                 sparsity, diff_percentage))
+                                 #sparsity, diff_percentage))
+                                 sparsity, 0.0))
             data_dict[tensor_name].append(feature_map_extraction(self._data_list[i], batch_idx, channel_idx))
             self._local_step[tensor_name] += 1
           else:
@@ -273,7 +270,7 @@ def train():
         checkpoint_dir=FLAGS.train_dir,
         hooks=[tf.train.StopAtStepHook(last_step=FLAGS.max_steps),
                tf.train.NanTensorHook(loss),
-               #tf.train.SummarySaverHook(save_steps=FLAGS.log_frequency, summary_writer=summary_writer, summary_op=sparsity_summary_op),
+               tf.train.SummarySaverHook(save_steps=FLAGS.log_frequency, summary_writer=summary_writer, summary_op=sparsity_summary_op),
                _LoggerHook(),
                _SparsityHook()],
         config=tf.ConfigProto(
