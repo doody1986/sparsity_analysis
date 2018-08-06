@@ -65,9 +65,9 @@ tf.app.flags.DEFINE_string('sparsity_dir', '/tmp/cifar10_sparsity',
                            """Directory where to write summaries""")
 tf.app.flags.DEFINE_integer('monitor_interval', 10,
                            """The interval of monitoring sparsity""")
-tf.app.flags.DEFINE_float('sparsity_threshold', 0.6,
+tf.app.flags.DEFINE_float('sparsity_threshold', 0.8,
                            """The threshold of sparsity to enable monitoring""")
-tf.app.flags.DEFINE_boolean('log_animation', False,
+tf.app.flags.DEFINE_boolean('log_animation', True,
                            """Weather or not log the animation for tracking
                            the change of spatial pattern""")
 tf.app.flags.DEFINE_integer('batch_idx', 0,
