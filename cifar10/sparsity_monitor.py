@@ -54,6 +54,7 @@ class MonitoredTensorInfo:
     self._fd = None
     self._results_str = "Monitor session for tensor %s finished: global step: %d\nStatus: %s\nSparsity stage: %s\nMonitor period: %d\nAveraged sparsity = %.2f\nAveraged zero block ratio = %.2f\n"
     self._enabled = False
+    self._valid = True
 
     self._data_tensor = None
     self._sparsity_tensor = None
@@ -163,22 +164,26 @@ class SparsityMonitor:
         
   def check_hibernation(self):
     assert self._can_hibernate == False
-    hibernation_ready_count = 0
+    hibernation_ready_valid_count = 0
+    hibernation_ready_invalid_count = 0
     for i in range(self._num_sparsity_info):
       # Condition 1
       next_possible_monitor_period = self._sparsity_info[i]._monitor_period * self._monitor_period_multiple
-      if next_possible_monitor_period > self._hibernation_period:
-        hibernation_ready_count += 1
+      if next_possible_monitor_period > self._hibernation_period and self._sparsity_info[i]._valid:
+        hibernation_ready_valid_count += 1
 
       # Condition 2
-      if self._sparsity_info[i]._sparsity < self._initial_sparsity and self._sparsity_info[i]._sparsity > 0:
-        hibernation_ready_count += 1
-    if hibernation_ready_count == self._num_sparsity_info:
+      #if self._sparsity_info[i]._sparsity < self._initial_sparsity and self._sparsity_info[i]._sparsity > 0:
+      if not self._sparsity_info[i]._valid:
+        hibernation_ready_invalid_count += 1
+
+    total_count = hibernation_ready_valid_count + hibernation_ready_invalid_count
+    if total_count == self._num_sparsity_info and hibernation_ready_invalid_count != self._num_sparsity_info:
       self._can_hibernate = True
       # Remove the sparsity history
       for i in range(self._num_sparsity_info):
         self._sparsity_info[i]._sparsity_history = []
-    return hibernation_ready_count
+    return total_count
 
   def check_active(self):
     assert self._can_hibernate == True
@@ -279,10 +284,12 @@ class SparsityMonitor:
       for i in range(self._num_sparsity_info):
         if global_step % self._sparsity_info[i]._monitor_period == 0:
           self._sparsity_info[i]._enabled = True
+          self._sparsity_info[i]._valid = True
     elif self._status == Status.hibernate:
       if global_step % self._hibernation_period == 0:
         for i in range(self._num_sparsity_info):
           self._sparsity_info[i]._enabled = True
+          self._sparsity_info[i]._valid = True
 
     self._monitor_enabled_tensor_list = []
     self._monitor_enabled_tensor_id_list = []
@@ -326,10 +333,11 @@ class SparsityMonitor:
 
         # Reset the sparsity info for next period
         self._sparsity_info[i].reset()
-      elif self._sparsity_info[i]._local_step == 0 and self._sparsity_info[i]._sparsity < self._initial_sparsity:
+      elif self._sparsity_info[i]._local_step == 1 and self._sparsity_info[i]._sparsity < self._initial_sparsity:
         # The sparsity is too small to be recorded
         self._sparsity_info[i].reset()
         self._sparsity_info[i]._enabled = False
+        self._sparsity_info[i]._valid = False
 
     # Status transition
     if self._status == Status.active:
