@@ -189,19 +189,26 @@ def inference(images):
                                          shape=[5, 5, 3, 64],
                                          stddev=5e-2,
                                          wd=None)
-    conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
+    pre_conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
+    monitored_tensor_list.append(pre_conv) # Monitors grad to RELU
+
     biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.0))
-    pre_activation = tf.nn.bias_add(conv, biases)
+    pre_activation = tf.nn.bias_add(pre_conv, biases)
+    monitored_tensor_list.append(pre_activation) # Monitors grad to RELU
+
+
     conv1 = tf.nn.relu(pre_activation, name="relu")
-    monitored_tensor_list.append(conv1)
+    monitored_tensor_list.append(conv1) # Monitors grad to POOL
 
   # pool1
   pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
                          padding='SAME', name='pool1')
-  monitored_tensor_list.append(pool1)
+  monitored_tensor_list.append(pool1) # Monitors grad to norm1
+  
   # norm1
   norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
                     name='norm1')
+  monitored_tensor_list.append(norm1) # Monitors grad to conv2
 
   # conv2
   with tf.variable_scope('conv2') as scope:
@@ -209,19 +216,25 @@ def inference(images):
                                          shape=[5, 5, 64, 64],
                                          stddev=5e-2,
                                          wd=None)
-    conv = tf.nn.conv2d(norm1, kernel, [1, 1, 1, 1], padding='SAME')
+    pre_conv = tf.nn.conv2d(norm1, kernel, [1, 1, 1, 1], padding='SAME')
+    monitored_tensor_list.append(pre_conv) # Monitors grad to RELU
+    
     biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
-    pre_activation = tf.nn.bias_add(conv, biases)
+    pre_activation = tf.nn.bias_add(pre_conv, biases)
+    monitored_tensor_list.append(pre_activation) # Monitors grad to RELU
+    
     conv2 = tf.nn.relu(pre_activation, name="relu")
-    monitored_tensor_list.append(conv2)
+    monitored_tensor_list.append(conv2) #monitors grad to norm2
 
   # norm2
   norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
                     name='norm2')
+  monitored_tensor_list.append(norm2) # Monitors grad to pool2
+
   # pool2
   pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1],
                          strides=[1, 2, 2, 1], padding='SAME', name='pool2')
-  monitored_tensor_list.append(pool2)
+  monitored_tensor_list.append(pool2) # Monitors grad to local3
 
   # local3
   with tf.variable_scope('local3') as scope:
@@ -232,7 +245,7 @@ def inference(images):
                                           stddev=0.04, wd=0.004)
     biases = _variable_on_cpu('biases', [384], tf.constant_initializer(0.1))
     local3 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name="relu")
-    monitored_tensor_list.append(local3)
+    #monitored_tensor_list.append(local3)
     
 
   # local4
@@ -241,7 +254,7 @@ def inference(images):
                                           stddev=0.04, wd=0.004)
     biases = _variable_on_cpu('biases', [192], tf.constant_initializer(0.1))
     local4 = tf.nn.relu(tf.matmul(local3, weights) + biases, name="relu")
-    monitored_tensor_list.append(local4)
+    #monitored_tensor_list.append(local4)
 
   # linear layer(WX + b),
   # We don't apply softmax here because
@@ -325,6 +338,11 @@ def train(total_loss, tensor_list, global_step):
   retrieve_list = sparsity_util.sparsity_hook_forward(tensor_list)
   grad_retrieve_list = sparsity_util.sparsity_hook_backward(total_loss, tensor_list)
   retrieve_list = retrieve_list + grad_retrieve_list
+  print("LOG: Retrieved lists:")
+  for t in retrieve_list:
+    print (t[0].op.name)
+
+  print("LOG: ---")
   # Variables that affect learning rate.
   num_batches_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / FLAGS.batch_size
   decay_steps = int(num_batches_per_epoch * NUM_EPOCHS_PER_DECAY)
@@ -356,6 +374,14 @@ def train(total_loss, tensor_list, global_step):
   for grad, var in grads:
     if grad is not None:
       tf.summary.scalar(var.op.name + '/gradients/sparsity', tf.nn.zero_fraction(grad))
+
+      if(len(list(grad.get_shape()))==4):
+        #temp_grad = tf.nn.relu(tf.sign(tf.abs(grad)))*255
+        #temp_grad = tf.nn.relu(tf.sign(grad))*255
+        temp_grad = tf.abs(grad)
+        print("bingo", temp_grad[:,:,:,0:1].get_shape())
+        tf.summary.image(var.op.name + '/gradients/img-tmp', temp_grad[:,:,:,0:1])
+        tf.summary.image(var.op.name + '/gradients/img-grad', (tf.nn.relu(tf.sign(tf.abs(grad)))*255)[:,:,:,0:1])
 
   # Track the moving averages of all trainable variables.
   variable_averages = tf.train.ExponentialMovingAverage(

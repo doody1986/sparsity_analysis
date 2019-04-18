@@ -40,8 +40,8 @@ class BlockSparsityUtil:
       n_row = shape[0].value
       n_col = shape[1].value * shape[2].value * shape[3].value
       matrix = a.reshape((n_row, n_col))
-    n_block_row = int(n_row + self._block_size - 1) / int(self._block_size)
-    n_block_col = int(n_col + self._block_size - 1) / int(self._block_size)
+    n_block_row = int(n_row + self._block_size - 1) // int(self._block_size)
+    n_block_col = int(n_col + self._block_size - 1) // int(self._block_size)
 
     n_blocks = n_block_row * n_block_col
 
