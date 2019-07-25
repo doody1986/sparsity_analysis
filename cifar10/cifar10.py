@@ -184,60 +184,63 @@ def inference(images):
   # by replacing all instances of tf.get_variable() with tf.Variable().
   #
   # conv1
-  with tf.variable_scope('conv1') as scope:
-    kernel = _variable_with_weight_decay('weights',
+  with tf.variable_scope('00a_conv1') as scope:
+    kernel = _variable_with_weight_decay('00_weights_1',
                                          shape=[5, 5, 3, 64],
                                          stddev=5e-2,
                                          wd=None)
-    pre_conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
-    monitored_tensor_list.append(pre_conv) # Monitors grad to RELU
+    conv_out = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME',name="01_conv_out_1")
+    monitored_tensor_list.append(conv_out) # Monitors grad to RELU
 
-    biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.0))
-    pre_activation = tf.nn.bias_add(pre_conv, biases)
+    biases = _variable_on_cpu('01_biases_1', [64], tf.constant_initializer(0.0))
+    pre_activation = tf.nn.bias_add(conv_out, biases,name="02_conv_plus_bias_1")
     monitored_tensor_list.append(pre_activation) # Monitors grad to RELU
 
 
-    conv1 = tf.nn.relu(pre_activation, name="relu")
+    conv1 = tf.nn.relu(pre_activation, name="03_relu_1")
     monitored_tensor_list.append(conv1) # Monitors grad to POOL
 
   # pool1
-  pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
-                         padding='SAME', name='pool1')
-  monitored_tensor_list.append(pool1) # Monitors grad to norm1
-  
-  # norm1
-  norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                    name='norm1')
-  monitored_tensor_list.append(norm1) # Monitors grad to conv2
+  with tf.variable_scope('00b_after_conv1') as scope:
+    pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
+                            padding='SAME', name='00_pool_1')
+    monitored_tensor_list.append(pool1) # Monitors grad to norm1
+    
+    # norm1
+    norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
+                        name='01_norm_1')
+    monitored_tensor_list.append(norm1) # Monitors grad to conv2
 
   # conv2
-  with tf.variable_scope('conv2') as scope:
-    kernel = _variable_with_weight_decay('weights',
+  with tf.variable_scope('01a_conv2') as scope:
+    kernel = _variable_with_weight_decay('00_weights_2',
                                          shape=[5, 5, 64, 64],
                                          stddev=5e-2,
                                          wd=None)
-    pre_conv = tf.nn.conv2d(norm1, kernel, [1, 1, 1, 1], padding='SAME')
+    pre_conv = tf.nn.conv2d(norm1, kernel, [1, 1, 1, 1],
+            padding='SAME',name="01_conv_out_2")
     monitored_tensor_list.append(pre_conv) # Monitors grad to RELU
     
-    biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
-    pre_activation = tf.nn.bias_add(pre_conv, biases)
+    biases = _variable_on_cpu('02_biases_2', [64], tf.constant_initializer(0.1))
+    pre_activation = tf.nn.bias_add(pre_conv, biases, name="02_conv_plus_bias_2")
     monitored_tensor_list.append(pre_activation) # Monitors grad to RELU
     
-    conv2 = tf.nn.relu(pre_activation, name="relu")
+    conv2 = tf.nn.relu(pre_activation, name="03_relu_2")
     monitored_tensor_list.append(conv2) #monitors grad to norm2
 
   # norm2
-  norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                    name='norm2')
-  monitored_tensor_list.append(norm2) # Monitors grad to pool2
+  with tf.variable_scope('01b_after_conv2') as scope:
+    norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
+                        name='00_norm_2')
+    monitored_tensor_list.append(norm2) # Monitors grad to pool2
 
-  # pool2
-  pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1],
-                         strides=[1, 2, 2, 1], padding='SAME', name='pool2')
-  monitored_tensor_list.append(pool2) # Monitors grad to local3
+    # pool2
+    pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1],
+                            strides=[1, 2, 2, 1], padding='SAME', name='01_pool_2')
+    monitored_tensor_list.append(pool2) # Monitors grad to local3
 
   # local3
-  with tf.variable_scope('local3') as scope:
+  with tf.variable_scope('04a_local3') as scope:
     # Move everything into depth so we can perform a single matrix multiply.
     reshape = tf.reshape(pool2, [images.get_shape().as_list()[0], -1])
     dim = reshape.get_shape()[1].value
@@ -249,7 +252,7 @@ def inference(images):
     
 
   # local4
-  with tf.variable_scope('local4') as scope:
+  with tf.variable_scope('05a_local4') as scope:
     weights = _variable_with_weight_decay('weights', shape=[384, 192],
                                           stddev=0.04, wd=0.004)
     biases = _variable_on_cpu('biases', [192], tf.constant_initializer(0.1))
@@ -260,7 +263,7 @@ def inference(images):
   # We don't apply softmax here because
   # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
   # and performs the softmax internally for efficiency.
-  with tf.variable_scope('softmax_linear') as scope:
+  with tf.variable_scope('06_softmax_linear') as scope:
     weights = _variable_with_weight_decay('weights', [192, NUM_CLASSES],
                                           stddev=1/192.0, wd=None)
     biases = _variable_on_cpu('biases', [NUM_CLASSES],
@@ -371,9 +374,12 @@ def train(total_loss, tensor_list, global_step):
   #  tf.summary.scalar(var.op.name, tf.nn.zero_fraction(var))
 
   # Add sparsity for gradients.
+  # It only works for weights and biases, other grads are measured somewhere else
   for grad, var in grads:
     if grad is not None:
       tf.summary.scalar(var.op.name + '/gradients/sparsity', tf.nn.zero_fraction(grad))
+
+      # TODO Modify here for getting column sparsity on /gradients/sparsity tensors
 
       if(len(list(grad.get_shape()))==4):
         #temp_grad = tf.nn.relu(tf.sign(tf.abs(grad)))*255

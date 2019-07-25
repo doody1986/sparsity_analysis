@@ -6,6 +6,20 @@ import tensorflow as tf
 
 TOWER_NAME = 'tower'
 
+def get_dim_sparsity(input_tensor,dim=0):
+    dim_size = input_tensor.shape[dim]
+    dim_nz=tf.count_nonzero(input_tensor, dim)
+    dim_density = dim_nz/dim_size
+    sparsity_tensor = 1-dim_density
+    return sparsity_tensor
+
+def get_image_patches(input_tensor, filter_size):
+    image_patches = tf.extract_image_patches(input_tensor,
+                                         [1,filter_size, filter_size, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME')
+    return image_patches
+
 def sparsity_hook_forward(x_list):
   """Helper to create summaries of sparsity.
 
@@ -20,9 +34,23 @@ def sparsity_hook_forward(x_list):
   retrieve_list = []
   for x in x_list:
     tensor_name = x.op.name
+    
+    # Get regular sparsity
     sparsity = tf.nn.zero_fraction(x)
+    if ("conv" in tensor_name):
+        print(x.shape)
+    
     tf.summary.scalar(tensor_name + '/sparsity', sparsity)
     retrieve_list.append((x, sparsity))
+
+    # get column sparsity
+    im2col=get_image_patches(x,5)
+    col_sparsity = get_dim_sparsity(im2col,3)
+    tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
+
+
+    retrieve_list.append((x, sparsity))
+
   return retrieve_list
 
 def sparsity_hook_backward(loss, x_list):
@@ -42,6 +70,7 @@ def sparsity_hook_backward(loss, x_list):
   grad_retrieve_list = []
   for g in gradient_list:
     tensor_name = g.op.name
+    # Get full sparsity
     sparsity = tf.nn.zero_fraction(g)
     tf.summary.scalar(tensor_name + '/sparsity', sparsity)
     grad_retrieve_list.append((g, sparsity))
