@@ -19,7 +19,7 @@ https://github.com/wenxinxu/resnet-in-tensorflow/blob/master/resnet.py
 In order to run:
 
 ```
-# for 100k iterations this will take ~13h in an core i7-8700 
+# for 100k iterations and `n=1` this will take ~13h in an core i7-8700 
 python resnet50_train.py
 ```
 
