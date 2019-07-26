@@ -52,3 +52,7 @@ total layers = 1 + 2n + 2n + 2n +1 = 6n + 2
 ```
 
 The last block with channels of 512 in size is omitted, but can be integrated.
+
+The remainder of the files are presented in the following figure:
+
+![Important files](sparsitymonitor-resnet.png)
