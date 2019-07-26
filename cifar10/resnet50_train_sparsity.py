@@ -58,6 +58,8 @@ tf.app.flags.DEFINE_integer('batch_idx', 0,
                            """The batch index to extract the feature map""")
 tf.app.flags.DEFINE_integer('block_size', 4,
                            """The block size of block-sparse representation""")
+tf.app.flags.DEFINE_string('network_type', 'resnet50',
+                           """CNN type: resnet_50 or cifar10""")
 
 def get_non_zero_index(a, shape):
   raw_index = np.where(a != 0)

@@ -4,6 +4,8 @@ from __future__ import print_function
 import numpy as np
 import tensorflow as tf
 
+FLAGS = tf.app.flags.FLAGS
+
 TOWER_NAME = 'tower'
 
 def get_dim_sparsity(input_tensor,dim=0):
@@ -44,10 +46,16 @@ def sparsity_hook_forward(x_list):
     retrieve_list.append((x, sparsity))
 
     # get column sparsity
-    im2col=get_image_patches(x,5)
-    col_sparsity = get_dim_sparsity(im2col,3)
-    tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
+    # patches differ from model to model
+    if FLAGS.network_type == 'cifar10':
+        im2col=get_image_patches(x,5)
+        col_sparsity = get_dim_sparsity(im2col,3)
+        tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
 
+    if FLAGS.network_type == 'resnet50':
+        im2col=get_image_patches(x,3)
+        col_sparsity = get_dim_sparsity(im2col,3)
+        tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
 
     retrieve_list.append((x, sparsity))
 

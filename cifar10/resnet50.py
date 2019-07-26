@@ -154,8 +154,10 @@ def conv_bn_relu_layer(input_layer, filter_shape, stride, monitored_tensor_list)
     out_channel = filter_shape[-1]
     filter = create_variables(name='conv', shape=filter_shape)
 
-    conv_layer = tf.nn.conv2d(input_layer, filter, strides=[1, stride, stride, 1], padding='SAME')
-    bn_layer, monitored_tensor_list = batch_normalization_layer(conv_layer, out_channel, monitored_tensor_list=monitored_tensor_list)
+    conv_layer = tf.nn.conv2d(input_layer, filter, 
+                              strides=[1, stride, stride, 1], padding='SAME')
+    bn_layer, monitored_tensor_list = batch_normalization_layer(conv_layer, 
+            out_channel, monitored_tensor_list=monitored_tensor_list)
 
     output = tf.nn.relu(bn_layer)
     
@@ -217,18 +219,23 @@ def residual_block(input_layer, output_channel, first_block=False,monitored_tens
             filter = create_variables(name='conv', shape=[3, 3, input_channel, output_channel])
             conv1 = tf.nn.conv2d(input_layer, filter=filter, strides=[1, 1, 1, 1], padding='SAME')
         else:
-            conv1 , monitored_tensor_list= bn_relu_conv_layer(input_layer, [3, 3, input_channel, output_channel], stride, monitored_tensor_list)
+            conv1 , monitored_tensor_list= bn_relu_conv_layer(input_layer, 
+                [3, 3, input_channel, output_channel], stride,
+                monitored_tensor_list)
 
     with tf.variable_scope('conv2_in_block'):
-        conv2 , monitored_tensor_list= bn_relu_conv_layer(conv1, [3, 3, output_channel, output_channel], 1, monitored_tensor_list)
+        conv2 , monitored_tensor_list= bn_relu_conv_layer(conv1, 
+                [3, 3, output_channel, output_channel], 1, 
+                monitored_tensor_list)
 
     # When the channels of input layer and conv2 does not match, we add zero pads to increase the
     #  depth of input layers
     if increase_dim is True:
         pooled_input = tf.nn.avg_pool(input_layer, ksize=[1, 2, 2, 1],
                                       strides=[1, 2, 2, 1], padding='VALID')
-        padded_input = tf.pad(pooled_input, [[0, 0], [0, 0], [0, 0], [input_channel // 2,
-                                                                     input_channel // 2]])
+        padded_input = tf.pad(pooled_input, [[0, 0], [0, 0], [0, 0], 
+                                            [input_channel // 2,
+                                            input_channel // 2]])
     else:
         padded_input = input_layer
 
@@ -238,7 +245,7 @@ def residual_block(input_layer, output_channel, first_block=False,monitored_tens
 
     return output, monitored_tensor_list
 
-def inference(input_tensor_batch, n=1, reuse=False):
+def inference(input_tensor_batch, n=2, reuse=False):
     '''
     The main function that defines the ResNet. total layers = 1 + 2n + 2n + 2n +1 = 6n + 2
     :param input_tensor_batch: 4D tensor
@@ -251,89 +258,49 @@ def inference(input_tensor_batch, n=1, reuse=False):
     layers = []
     with tf.variable_scope('conv0', reuse=reuse):
         conv0, monitored_tensor_list = conv_bn_relu_layer(
-                input_tensor_batch, [3, 3, 3, 16], 1,
+                input_tensor_batch, [3, 3, 3, 64], 1,
                 monitored_tensor_list)
         #activation_summary(conv0)
         layers.append(conv0)
-        #monitored_tensor_list.append(conv1)
 
     for i in range(n):
         with tf.variable_scope('conv1_%d' %i, reuse=reuse):
             if i == 0:
-                conv1, monitored_tensor_list = residual_block(layers[-1], 16, first_block=True, monitored_tensor_list=monitored_tensor_list)
+                conv1, monitored_tensor_list = residual_block(layers[-1], 64,
+                        first_block=True,
+                        monitored_tensor_list=monitored_tensor_list)
             else:
-                conv1, monitored_tensor_list = residual_block(layers[-1], 16, monitored_tensor_list=monitored_tensor_list)
+                conv1, monitored_tensor_list = residual_block(layers[-1], 64,
+                        monitored_tensor_list=monitored_tensor_list)
             #activation_summary(conv1)
             layers.append(conv1)
 
     for i in range(n):
         with tf.variable_scope('conv2_%d' %i, reuse=reuse):
-            conv2, monitored_tensor_list = residual_block(layers[-1], 32, monitored_tensor_list=monitored_tensor_list)
+            conv2, monitored_tensor_list = residual_block(layers[-1], 128,
+                    monitored_tensor_list=monitored_tensor_list)
             #activation_summary(conv2)
             layers.append(conv2)
 
     for i in range(n):
         with tf.variable_scope('conv3_%d' %i, reuse=reuse):
-            conv3, monitored_tensor_list = residual_block(layers[-1], 64, monitored_tensor_list=monitored_tensor_list)
+            conv3, monitored_tensor_list = residual_block(layers[-1], 256,
+                    monitored_tensor_list=monitored_tensor_list)
             layers.append(conv3)
-        assert conv3.get_shape().as_list()[1:] == [8, 8, 64]
+        assert conv3.get_shape().as_list()[1:] == [8, 8, 256]
 
     with tf.variable_scope('fc', reuse=reuse):
         in_channel = layers[-1].get_shape().as_list()[-1]
-        bn_layer,monitored_tensor_list = batch_normalization_layer(layers[-1], in_channel, monitored_tensor_list=monitored_tensor_list)
+        bn_layer,monitored_tensor_list = batch_normalization_layer(layers[-1],
+                in_channel, monitored_tensor_list=monitored_tensor_list)
         relu_layer = tf.nn.relu(bn_layer)
         global_pool = tf.reduce_mean(relu_layer, [1, 2])
 
-        assert global_pool.get_shape().as_list()[-1:] == [64]
-        output, monitored_tensor_list = output_layer(global_pool, 10, monitored_tensor_list)
+        assert global_pool.get_shape().as_list()[-1:] == [256]
+        output, monitored_tensor_list = output_layer(global_pool, 10,
+                monitored_tensor_list)
         layers.append(output) 
     return layers[-1], monitored_tensor_list
-
-# THESE FUNCTIONS ARE FROM OLDER FILES
-
-def _variable_on_cpu(name, shape, initializer):
-  """Helper to create a Variable stored on CPU memory.
-
-  Args:
-    name: name of the variable
-    shape: list of ints
-    initializer: initializer for Variable
-
-  Returns:
-    Variable Tensor
-  """
-  with tf.device('/cpu:0'):
-    dtype = tf.float16 if FLAGS.use_fp16 else tf.float32
-    var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
-  return var
-
-
-def _variable_with_weight_decay(name, shape, stddev, wd):
-  """Helper to create an initialized Variable with weight decay.
-
-  Note that the Variable is initialized with a truncated normal distribution.
-  A weight decay is added only if one is specified.
-
-  Args:
-    name: name of the variable
-    shape: list of ints
-    stddev: standard deviation of a truncated Gaussian
-    wd: add L2Loss weight decay multiplied by this float. If None, weight
-        decay is not added for this Variable.
-
-  Returns:
-    Variable Tensor
-  """
-  dtype = tf.float16 if FLAGS.use_fp16 else tf.float32
-  var = _variable_on_cpu(
-      name,
-      shape,
-      tf.truncated_normal_initializer(stddev=stddev, dtype=dtype))
-  if wd is not None:
-    weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
-    tf.add_to_collection('losses', weight_decay)
-  return var
-
 
 def distorted_inputs():
   """Construct distorted input for ResNet training using the Reader ops.
@@ -354,134 +321,6 @@ def distorted_inputs():
     images = tf.cast(images, tf.float16)
     labels = tf.cast(labels, tf.float16)
   return images, labels
-
-
-def inputs(eval_data):
-  """Construct input for ResNet evaluation using the Reader ops.
-
-  Args:
-    eval_data: bool, indicating if one should use the train or eval data set.
-
-  Returns:
-    images: Images. 4D tensor of [batch_size, IMAGE_SIZE, IMAGE_SIZE, 3] size.
-    labels: Labels. 1D tensor of [batch_size] size.
-
-  Raises:
-    ValueError: If no data_dir
-  """
-  if not FLAGS.data_dir:
-    raise ValueError('Please supply a data_dir')
-  data_dir = os.path.join(FLAGS.data_dir, 'resnet-50-batches-bin')
-  images, labels = resnet50_input.inputs(eval_data=eval_data,
-                                        data_dir=data_dir,
-                                        batch_size=FLAGS.batch_size)
-  if FLAGS.use_fp16:
-    images = tf.cast(images, tf.float16)
-    labels = tf.cast(labels, tf.float16)
-  return images, labels
-
-
-def inference2(images):
-  """Build the ResNet-50 model.
-
-  Args:
-    images: Images returned from distorted_inputs() or inputs().
-
-  Returns:
-    Logits.
-  """
-  monitored_tensor_list = []
-  # We instantiate all variables using tf.get_variable() instead of
-  # tf.Variable() in order to share variables across multiple GPU training runs.
-  # If we only ran this model on a single GPU, we could simplify this function
-  # by replacing all instances of tf.get_variable() with tf.Variable().
-  #
-  # conv1
-  with tf.variable_scope('conv1') as scope:
-    kernel = _variable_with_weight_decay('weights',
-                                         shape=[5, 5, 3, 64],
-                                         stddev=5e-2,
-                                         wd=None)
-    pre_conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
-    monitored_tensor_list.append(pre_conv) # Monitors grad to RELU
-
-    biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.0))
-    pre_activation = tf.nn.bias_add(pre_conv, biases)
-    monitored_tensor_list.append(pre_activation) # Monitors grad to RELU
-
-
-    conv1 = tf.nn.relu(pre_activation, name="relu")
-    monitored_tensor_list.append(conv1) # Monitors grad to POOL
-
-  # pool1
-  pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
-                         padding='SAME', name='pool1')
-  monitored_tensor_list.append(pool1) # Monitors grad to norm1
-  
-  # norm1
-  norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                    name='norm1')
-  monitored_tensor_list.append(norm1) # Monitors grad to conv2
-
-  # conv2
-  with tf.variable_scope('conv2') as scope:
-    kernel = _variable_with_weight_decay('weights',
-                                         shape=[5, 5, 64, 64],
-                                         stddev=5e-2,
-                                         wd=None)
-    pre_conv = tf.nn.conv2d(norm1, kernel, [1, 1, 1, 1], padding='SAME')
-    monitored_tensor_list.append(pre_conv) # Monitors grad to RELU
-    
-    biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
-    pre_activation = tf.nn.bias_add(pre_conv, biases)
-    monitored_tensor_list.append(pre_activation) # Monitors grad to RELU
-    
-    conv2 = tf.nn.relu(pre_activation, name="relu")
-    monitored_tensor_list.append(conv2) #monitors grad to norm2
-
-  # norm2
-  norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                    name='norm2')
-  monitored_tensor_list.append(norm2) # Monitors grad to pool2
-
-  # pool2
-  pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1],
-                         strides=[1, 2, 2, 1], padding='SAME', name='pool2')
-  monitored_tensor_list.append(pool2) # Monitors grad to local3
-
-  # local3
-  with tf.variable_scope('local3') as scope:
-    # Move everything into depth so we can perform a single matrix multiply.
-    reshape = tf.reshape(pool2, [images.get_shape().as_list()[0], -1])
-    dim = reshape.get_shape()[1].value
-    weights = _variable_with_weight_decay('weights', shape=[dim, 384],
-                                          stddev=0.04, wd=0.004)
-    biases = _variable_on_cpu('biases', [384], tf.constant_initializer(0.1))
-    local3 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name="relu")
-    #monitored_tensor_list.append(local3)
-    
-
-  # local4
-  with tf.variable_scope('local4') as scope:
-    weights = _variable_with_weight_decay('weights', shape=[384, 192],
-                                          stddev=0.04, wd=0.004)
-    biases = _variable_on_cpu('biases', [192], tf.constant_initializer(0.1))
-    local4 = tf.nn.relu(tf.matmul(local3, weights) + biases, name="relu")
-    #monitored_tensor_list.append(local4)
-
-  # linear layer(WX + b),
-  # We don't apply softmax here because
-  # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
-  # and performs the softmax internally for efficiency.
-  with tf.variable_scope('softmax_linear') as scope:
-    weights = _variable_with_weight_decay('weights', [192, NUM_CLASSES],
-                                          stddev=1/192.0, wd=None)
-    biases = _variable_on_cpu('biases', [NUM_CLASSES],
-                              tf.constant_initializer(0.0))
-    softmax_linear = tf.add(tf.matmul(local4, weights), biases, name="output")
-
-  return softmax_linear, monitored_tensor_list
-
 
 def loss(logits, labels):
   """Add L2Loss to all the trainable variables.
