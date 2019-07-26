@@ -1,13 +1,54 @@
-**NOTE: For users interested in multi-GPU, we recommend looking at the newer [cifar10_estimator](https://github.com/tensorflow/models/tree/master/tutorials/image/cifar10_estimator) example instead.**
+# What we implemented?
 
----
+I have consulted the following implementations to finally bring resnet to life:
 
-CIFAR-10 is a common benchmark in machine learning for image recognition.
+```
+https://github.com/wenxinxu/resnet-in-tensorflow/blob/master/resnet.py
+https://github.com/chenxi116/TF-resnet/blob/master/resnet_model.py
+https://github.com/tensorflow/models/blob/master/official/resnet/resnet_model.py
+```
 
-http://www.cs.toronto.edu/~kriz/cifar.html
+The model implemented here is more similar to:
 
-Code in this directory demonstrates how to use TensorFlow to train and evaluate a convolutional neural network (CNN) on both CPU and GPU. We also demonstrate how to train a CNN over multiple GPUs.
+```
+https://github.com/wenxinxu/resnet-in-tensorflow/blob/master/resnet.py
+```
 
-Detailed instructions on how to get started available at:
+# How to run?
 
-http://tensorflow.org/tutorials/deep_cnn/
+In order to run:
+
+```
+# for 100k iterations this will take ~13h in an core i7-8700 
+python resnet50_train.py
+```
+
+# What results are observed?
+
+There are some logs and models available.
+```
+# 14 layer resnet, with regular channel sizes 64 128 256, trained ~11k iter
+tensorboard --logdir=tensorboard-logs/resnet-1-4-4-4-1-regular-channels/
+
+# 8 layer resnet, with  reduced channel sizes 32 64 128, trained 100k iter
+tensorboard --logdir=tensorboard-logs/resnet-1-2-2-2-1-low-channels/
+
+# Shi's net, trained 10k iter
+tensorboard --logdir=tensorboard-logs/cifar10_train-10k-detailed/
+```
+
+# Important files?
+To modify the resnet to bigger sizes, modify this file `resnet50.py` and this
+function:
+
+```
+# 'n' changes the number of consecutive blocks
+def inference(input_tensor_batch, n=2, reuse=False):
+```
+
+Right now, the network has this many total layers:
+```
+total layers = 1 + 2n + 2n + 2n +1 = 6n + 2
+```
+
+The last block with channels of 512 in size is omitted, but can be integrated.

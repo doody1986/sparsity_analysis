@@ -1,0 +1,6 @@
+model_checkpoint_path: "/tmp/resnet50_train/model.ckpt-11501"
+all_model_checkpoint_paths: "/tmp/resnet50_train/model.ckpt-10781"
+all_model_checkpoint_paths: "/tmp/resnet50_train/model.ckpt-10961"
+all_model_checkpoint_paths: "/tmp/resnet50_train/model.ckpt-11141"
+all_model_checkpoint_paths: "/tmp/resnet50_train/model.ckpt-11321"
+all_model_checkpoint_paths: "/tmp/resnet50_train/model.ckpt-11501"
