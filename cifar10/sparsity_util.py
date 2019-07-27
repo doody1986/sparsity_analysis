@@ -36,12 +36,14 @@ def sparsity_hook_forward(x_list):
   retrieve_list = []
   for x in x_list:
     tensor_name = x.op.name
+    # print('Forward - ' + x.op.name)
+    # print(x.shape)
+    # print()
     
     # Get regular sparsity
     sparsity = tf.nn.zero_fraction(x)
-    if ("conv" in tensor_name):
-        print(x.shape)
-    
+    #if ("conv" in tensor_name):
+    #    print(x.op.name + ' ' + x.shape)
     tf.summary.scalar(tensor_name + '/sparsity', sparsity)
     retrieve_list.append((x, sparsity))
 
@@ -53,9 +55,10 @@ def sparsity_hook_forward(x_list):
         tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
 
     if FLAGS.network_type == 'resnet50':
-        im2col=get_image_patches(x,3)
-        col_sparsity = get_dim_sparsity(im2col,3)
-        tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
+        if 'block/Relu' in tensor_name:
+            im2col=get_image_patches(x,3)
+            col_sparsity = get_dim_sparsity(im2col,3)
+            tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
 
     retrieve_list.append((x, sparsity))
 
@@ -78,10 +81,20 @@ def sparsity_hook_backward(loss, x_list):
   grad_retrieve_list = []
   for g in gradient_list:
     tensor_name = g.op.name
+    # print('Back - ' + g.op.name)
+    # print(g.shape)
+    # print()
+
     # Get full sparsity
     sparsity = tf.nn.zero_fraction(g)
     tf.summary.scalar(tensor_name + '/sparsity', sparsity)
     grad_retrieve_list.append((g, sparsity))
+    
+    if FLAGS.network_type == 'resnet50':
+        if 'gradients/AddN' in tensor_name:
+            im2col=get_image_patches(g,3)
+            col_sparsity = get_dim_sparsity(im2col,3)
+            tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
   return grad_retrieve_list
 
 def get_non_zero_index(a, shape):

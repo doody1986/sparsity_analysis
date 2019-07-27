@@ -161,10 +161,10 @@ def conv_bn_relu_layer(input_layer, filter_shape, stride, monitored_tensor_list)
 
     output = tf.nn.relu(bn_layer)
     
-    monitored_tensor_list.append(input_layer)
-    monitored_tensor_list.append(conv_layer)
-    monitored_tensor_list.append(bn_layer)
-    monitored_tensor_list.append(output)
+    # monitored_tensor_list.append(input_layer)
+    # monitored_tensor_list.append(conv_layer)
+    # monitored_tensor_list.append(bn_layer)
+    # monitored_tensor_list.append(output)
     return output, monitored_tensor_list
 
 # This is the main block and is used on the rest of the network
@@ -185,8 +185,8 @@ def bn_relu_conv_layer(input_layer, filter_shape, stride, monitored_tensor_list)
     filter = create_variables(name='conv', shape=filter_shape)
     conv_layer = tf.nn.conv2d(relu_layer, filter, strides=[1, stride, stride, 1], padding='SAME')
     
-    monitored_tensor_list.append(input_layer)
-    monitored_tensor_list.append(bn_layer)
+    #monitored_tensor_list.append(input_layer)
+    #monitored_tensor_list.append(bn_layer)
     monitored_tensor_list.append(relu_layer)
     monitored_tensor_list.append(conv_layer)
     return conv_layer, monitored_tensor_list
@@ -241,11 +241,11 @@ def residual_block(input_layer, output_channel, first_block=False,monitored_tens
 
     output = conv2 + padded_input
     
-    monitored_tensor_list.append(output)
+    #monitored_tensor_list.append(output)
 
     return output, monitored_tensor_list
 
-def inference(input_tensor_batch, n=2, reuse=False):
+def inference(input_tensor_batch, n=1, reuse=False):
     '''
     The main function that defines the ResNet. total layers = 1 + 2n + 2n + 2n +1 = 6n + 2
     :param input_tensor_batch: 4D tensor
@@ -282,14 +282,20 @@ def inference(input_tensor_batch, n=2, reuse=False):
             #activation_summary(conv2)
             layers.append(conv2)
 
-    for i in range(n):
-        with tf.variable_scope('conv3_%d' %i, reuse=reuse):
-            conv3, monitored_tensor_list = residual_block(layers[-1], 256,
-                    monitored_tensor_list=monitored_tensor_list)
-            layers.append(conv3)
-        #TODO: remove assert
-        # It is here to make sure we downsize the input size 
-        assert conv3.get_shape().as_list()[1:] == [8, 8, 256]
+    #for i in range(n):
+    #    with tf.variable_scope('conv3_%d' %i, reuse=reuse):
+    #        conv3, monitored_tensor_list = residual_block(layers[-1], 256,
+    #                monitored_tensor_list=monitored_tensor_list)
+    #        layers.append(conv3)
+    #
+    #for i in range(n):
+    #    with tf.variable_scope('conv4_%d' %i, reuse=reuse):
+    #        conv4, monitored_tensor_list = residual_block(layers[-1], 512,
+    #                monitored_tensor_list=monitored_tensor_list)
+    #        layers.append(conv4)
+    #    #TODO: remove assert
+    #    # It is here to make sure we downsize the input size 
+    #    assert conv4.get_shape().as_list()[1:] == [4, 4, 512]
 
     # If you are interested on going to 512 channels, you must copy the last
     # block and adjust channel size it accordingly.
@@ -301,7 +307,7 @@ def inference(input_tensor_batch, n=2, reuse=False):
         relu_layer = tf.nn.relu(bn_layer)
         global_pool = tf.reduce_mean(relu_layer, [1, 2])
 
-        assert global_pool.get_shape().as_list()[-1:] == [256] # Match Nchannels
+        assert global_pool.get_shape().as_list()[-1:] == [128] # Match Nchannels
         output, monitored_tensor_list = output_layer(global_pool, 10,
                 monitored_tensor_list)
         layers.append(output) 
