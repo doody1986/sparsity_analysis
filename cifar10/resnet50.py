@@ -282,20 +282,20 @@ def inference(input_tensor_batch, n=1, reuse=False):
             #activation_summary(conv2)
             layers.append(conv2)
 
-    #for i in range(n):
-    #    with tf.variable_scope('conv3_%d' %i, reuse=reuse):
-    #        conv3, monitored_tensor_list = residual_block(layers[-1], 256,
-    #                monitored_tensor_list=monitored_tensor_list)
-    #        layers.append(conv3)
-    #
-    #for i in range(n):
-    #    with tf.variable_scope('conv4_%d' %i, reuse=reuse):
-    #        conv4, monitored_tensor_list = residual_block(layers[-1], 512,
-    #                monitored_tensor_list=monitored_tensor_list)
-    #        layers.append(conv4)
-    #    #TODO: remove assert
-    #    # It is here to make sure we downsize the input size 
-    #    assert conv4.get_shape().as_list()[1:] == [4, 4, 512]
+    for i in range(n):
+        with tf.variable_scope('conv3_%d' %i, reuse=reuse):
+            conv3, monitored_tensor_list = residual_block(layers[-1], 256,
+                    monitored_tensor_list=monitored_tensor_list)
+            layers.append(conv3)
+    
+    for i in range(n):
+        with tf.variable_scope('conv4_%d' %i, reuse=reuse):
+            conv4, monitored_tensor_list = residual_block(layers[-1], 512,
+                    monitored_tensor_list=monitored_tensor_list)
+            layers.append(conv4)
+        #TODO: remove assert
+        # It is here to make sure we downsize the input size 
+        assert conv4.get_shape().as_list()[1:] == [4, 4, 512]
 
     # If you are interested on going to 512 channels, you must copy the last
     # block and adjust channel size it accordingly.
@@ -307,7 +307,7 @@ def inference(input_tensor_batch, n=1, reuse=False):
         relu_layer = tf.nn.relu(bn_layer)
         global_pool = tf.reduce_mean(relu_layer, [1, 2])
 
-        assert global_pool.get_shape().as_list()[-1:] == [128] # Match Nchannels
+        assert global_pool.get_shape().as_list()[-1:] == [512] # Match Nchannels
         output, monitored_tensor_list = output_layer(global_pool, 10,
                 monitored_tensor_list)
         layers.append(output) 
@@ -325,7 +325,7 @@ def distorted_inputs():
   """
   if not FLAGS.data_dir:
     raise ValueError('Please supply a data_dir')
-  data_dir = os.path.join(FLAGS.data_dir, 'resnet-50-batches-bin')
+  data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
   images, labels = resnet50_input.distorted_inputs(data_dir=data_dir,
                                                   batch_size=FLAGS.batch_size)
   if FLAGS.use_fp16:

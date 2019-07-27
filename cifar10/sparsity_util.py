@@ -57,6 +57,9 @@ def sparsity_hook_forward(x_list):
     if FLAGS.network_type == 'resnet50':
         if 'block/Relu' in tensor_name:
             im2col=get_image_patches(x,3)
+            print ("FOR block/Relu im2col shape:")
+            print (im2col.shape)
+            print ()
             col_sparsity = get_dim_sparsity(im2col,3)
             tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
 
@@ -93,6 +96,9 @@ def sparsity_hook_backward(loss, x_list):
     if FLAGS.network_type == 'resnet50':
         if 'gradients/AddN' in tensor_name:
             im2col=get_image_patches(g,3)
+            print ("BACK gradients/AddN im2col shape:")
+            print (im2col.shape)
+            print ()
             col_sparsity = get_dim_sparsity(im2col,3)
             tf.summary.histogram(tensor_name + '/sparsity_histo',col_sparsity)
   return grad_retrieve_list
