@@ -92,7 +92,7 @@ class SparsityMonitor:
     self._hibernation_sparsity_history_length = 3
     self._hibernation_cond_sparsity_difference = 0.1
     self._hibernation_sparsity_history_length = 10
-    self._initial_sparsity = 0.6
+    self._initial_sparsity = 0.5
     self._sparsity_threshold_list = np.arange(self._initial_sparsity, 1, 0.1)
     self._first_sparse_stage_idx = 0
     self._second_sparse_stage_idx = 1
@@ -269,8 +269,8 @@ class SparsityMonitor:
         
         ani.save(workpath+figure_name+'.gif', dpi=80, writer='imagemagick')
         plt.close('all')
-    else:
-      print (self._sparsity_info[tensor_idx]._results_str)
+    # else:
+    #   print (self._sparsity_info[tensor_idx]._results_str)
 
   def scheduler_before(self, global_step):
     # Manage the status

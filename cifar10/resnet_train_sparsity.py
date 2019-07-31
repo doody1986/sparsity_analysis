@@ -47,7 +47,7 @@ from matplotlib.colors import BoundaryNorm
 
 import tensorflow as tf
 
-import vggnet
+import resnet
 import block_sparsity_util
 
 FLAGS = tf.app.flags.FLAGS
@@ -144,18 +144,18 @@ def train():
     # Force input pipeline to CPU:0 to avoid operations sometimes ending up on
     # GPU and resulting in a slow down.
     with tf.device('/cpu:0'):
-      images, labels = vggnet.inputs(False)
+      images, labels = resnet.distorted_inputs()
 
     # Build a Graph that computes the logits predictions from the
     # inference model.
-    logits, tensor_list = vggnet.inference(images)
+    logits, tensor_list = resnet.inference(images)
 
     # Calculate loss.
-    loss = vggnet.loss(logits, labels)
+    loss = resnet.loss(logits, labels)
 
     # Build a Graph that trains the model with one batch of examples and
     # updates the model parameters.
-    train_op, retrieve_list = vggnet.train(loss, tensor_list, global_step)
+    train_op, retrieve_list = resnet.train(loss, tensor_list, global_step)
 
     class _LoggerHook(tf.train.SessionRunHook):
       """Logs loss and runtime."""
@@ -270,7 +270,7 @@ def train():
         checkpoint_dir=FLAGS.train_dir,
         hooks=[tf.train.StopAtStepHook(last_step=FLAGS.max_steps),
                tf.train.NanTensorHook(loss),
-  #             tf.train.SummarySaverHook(save_steps=FLAGS.log_frequency, summary_writer=summary_writer, summary_op=sparsity_summary_op),
+               #tf.train.SummarySaverHook(save_steps=FLAGS.log_frequency, summary_writer=summary_writer, summary_op=sparsity_summary_op),
                _LoggerHook(),
                _SparsityHook()],
         config=tf.ConfigProto(
@@ -282,7 +282,7 @@ def train():
 
 
 def main(argv=None):  # pylint: disable=unused-argument
-  vggnet.maybe_download_and_extract()
+  resnet.maybe_download_and_extract()
   if tf.gfile.Exists(FLAGS.train_dir):
     tf.gfile.DeleteRecursively(FLAGS.train_dir)
   tf.gfile.MakeDirs(FLAGS.train_dir)
