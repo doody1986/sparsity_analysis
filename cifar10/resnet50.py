@@ -245,7 +245,7 @@ def residual_block(input_layer, output_channel, first_block=False,monitored_tens
 
     return output, monitored_tensor_list
 
-def inference(input_tensor_batch, n=1, reuse=False):
+def inference(input_tensor_batch, n=2, reuse=False):
     '''
     The main function that defines the ResNet. total layers = 1 + 2n + 2n + 2n +1 = 6n + 2
     :param input_tensor_batch: 4D tensor
