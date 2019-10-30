@@ -252,15 +252,34 @@ class SparsityMonitor:
       # Output results
       tensor_name = self._sparsity_info[tensor_idx]._data_tensor.name
       file_name = tensor_name.replace('/', '_').replace(':', '_') + '.txt'
-      self._sparsity_info[tensor_idx]._fd = open(workpath+file_name, 'a')
+      self._sparsity_info[tensor_idx]._fd = open(workpath+'/'+file_name, 'a')
       self._sparsity_info[tensor_idx]._fd.write(self._sparsity_info[tensor_idx]._results_str)
       self._sparsity_info[tensor_idx]._fd.close()
+
+      # Output data
+      enable_data_file = False
+      if enable_data_file:
+        data = self._sparsity_info[tensor_idx]._extracted_data_list[0]
+        batch_size = data.shape[0]
+        output_h = data.shape[1]
+        output_w = data.shape[2]
+        col_size = data.shape[3]
+        data = np.reshape(data, batch_size*output_h*output_w*col_size)
+
+        file_name = tensor_name.replace('/', '_').replace(':', '_') + \
+                    str(batch_size)+'_'+str(output_h)+'_'+str(output_w)+'_'+str(col_size)+'.data'
+        file_name = workpath+'/'+file_name
+        if not os.path.isfile(file_name):
+          self._sparsity_info[tensor_idx]._fd = open(file_name, 'w')
+          data.tofile(self._sparsity_info[tensor_idx]._fd, "\n")
+          self._sparsity_info[tensor_idx]._fd.close()
 
       # Plot the data pattern
       figure_name = tensor_name.replace('/', '_').replace(':', '_') +\
                     stage_str
 
-      if not os.path.isfile(figure_name):
+      enable_gif = False
+      if enable_gif and not os.path.isfile(figure_name):
         fig, ax = plt.subplots()
         num_frames = len(self._sparsity_info[tensor_idx]._extracted_data)
         ani = animation.FuncAnimation(fig, animate, frames=num_frames,
@@ -269,8 +288,8 @@ class SparsityMonitor:
         
         ani.save(workpath+figure_name+'.gif', dpi=80, writer='imagemagick')
         plt.close('all')
-    # else:
-    #   print (self._sparsity_info[tensor_idx]._results_str)
+    else:
+      print (self._sparsity_info[tensor_idx]._results_str)
 
   def scheduler_before(self, global_step):
     # Manage the status
@@ -359,7 +378,7 @@ class SparsityMonitor:
       shape = self._sparsity_info[tensor_id]._data_tensor.get_shape()
       tensor = self._sparsity_info[tensor_id]._data_tensor
       batch_idx = 0
-      channel_idx = 0
+      channel_idx = -1
       stage = self._sparsity_info[tensor_id]._stage
       #if stage == SparseStage.dense:
       #  sparsity_threshold = 0.6
@@ -391,8 +410,10 @@ class SparsityMonitor:
             # Calculate the moving average
             self._sparsity_info[tensor_id]._zero_block_ratio = self._sparsity_info[tensor_id]._zero_block_ratio * 0.9 + zero_block_ratio * 0.1
 
-          self._sparsity_info[tensor_id]._extracted_data_list.append(
-            sparsity_util.feature_map_extraction(current_data, self._data_format, batch_idx, channel_idx))
+          #self._sparsity_info[tensor_id]._extracted_data_list.append(
+          #  sparsity_util.feature_map_extraction(current_data, self._data_format, batch_idx, channel_idx))
+          
+          self._sparsity_info[tensor_id]._extracted_data_list.append(current_data)
         self._sparsity_info[tensor_id]._local_step += 1
       else:
         continue

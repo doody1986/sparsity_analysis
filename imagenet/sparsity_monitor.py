@@ -255,27 +255,31 @@ class SparsityMonitor:
       self._sparsity_info[tensor_idx]._fd = open(workpath+'/'+file_name, 'a')
       self._sparsity_info[tensor_idx]._fd.write(self._sparsity_info[tensor_idx]._results_str)
       self._sparsity_info[tensor_idx]._fd.close()
-      #data = self._sparsity_info[tensor_idx]._extracted_data_list[0]
-      #batch_size = data.shape[0]
-      #output_h = data.shape[1]
-      #output_w = data.shape[2]
-      #col_size = data.shape[3]
-      #data = np.reshape(data, batch_size*output_h*output_w*col_size)
 
-      #file_name = tensor_name.replace('/', '_').replace(':', '_') + \
-      #            str(batch_size)+'_'+str(output_h)+'_'+str(output_w)+'_'+str(col_size)+'.data'
-      #file_name = workpath+'/'+file_name
-      #if not os.path.isfile(file_name):
-      #  self._sparsity_info[tensor_idx]._fd = open(file_name, 'w')
-      #  data.tofile(self._sparsity_info[tensor_idx]._fd, "\n")
-      #  self._sparsity_info[tensor_idx]._fd.close()
+      # Output data
+      enable_data_file = False
+      if enable_data_file:
+        data = self._sparsity_info[tensor_idx]._extracted_data_list[0]
+        batch_size = data.shape[0]
+        output_h = data.shape[1]
+        output_w = data.shape[2]
+        col_size = data.shape[3]
+        data = np.reshape(data, batch_size*output_h*output_w*col_size)
+
+        file_name = tensor_name.replace('/', '_').replace(':', '_') + \
+                    str(batch_size)+'_'+str(output_h)+'_'+str(output_w)+'_'+str(col_size)+'.data'
+        file_name = workpath+'/'+file_name
+        if not os.path.isfile(file_name):
+          self._sparsity_info[tensor_idx]._fd = open(file_name, 'w')
+          data.tofile(self._sparsity_info[tensor_idx]._fd, "\n")
+          self._sparsity_info[tensor_idx]._fd.close()
 
       # Plot the data pattern
       figure_name = tensor_name.replace('/', '_').replace(':', '_') +\
                     stage_str
 
-      #if not os.path.isfile(figure_name):
-      if False:
+      enable_gif = False
+      if enable_gif and not os.path.isfile(figure_name):
         fig, ax = plt.subplots()
         num_frames = len(self._sparsity_info[tensor_idx]._extracted_data)
         ani = animation.FuncAnimation(fig, animate, frames=num_frames,
