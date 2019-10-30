@@ -153,7 +153,7 @@ def inputs(eval_data):
   return images, labels
 
 def inference(images):
-    """Build the VGG-16 model.
+    """Build the VGG-11 model.
     Args:
         images: Images returned from distorted_inputs() or inputs().
     Returns:
