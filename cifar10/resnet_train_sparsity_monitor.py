@@ -37,6 +37,7 @@ from __future__ import division
 from __future__ import print_function
 
 from datetime import datetime
+import os
 import time
 import collections
 import numpy as np
@@ -64,7 +65,7 @@ tf.app.flags.DEFINE_integer('log_frequency', 100,
                             """How often to log results to the console.""")
 tf.app.flags.DEFINE_string('sparsity_dir', '/tmp/cifar10_sparsity',
                            """Directory where to write summaries""")
-tf.app.flags.DEFINE_integer('monitor_interval', 10,
+tf.app.flags.DEFINE_integer('monitor_interval', 1,
                            """The interval of monitoring sparsity""")
 tf.app.flags.DEFINE_integer('monitor_period', 500,
                            """The period of monitoring sparsity""")
@@ -136,7 +137,7 @@ def train():
         return tf.train.SessionRunArgs(selected_list)  # Asks for loss value.
 
       def after_run(self, run_context, run_values):
-        self.monitor.scheduler_after(run_values.results, self._step)
+        self.monitor.scheduler_after(run_values.results, self._step, os.getcwd(), FLAGS.file_io)
 
     sparsity_summary_op = tf.summary.merge_all()
     summary_writer = tf.summary.FileWriter(FLAGS.sparsity_dir, g)

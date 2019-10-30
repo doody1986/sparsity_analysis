@@ -156,6 +156,7 @@ def conv_bn_relu_layer(input_layer, filter_shape, stride, monitored_tensor_list)
 
     output = tf.nn.relu(bn_layer)
     
+    # # Not important
     # monitored_tensor_list.append(input_layer)
     # monitored_tensor_list.append(conv_layer)
     # monitored_tensor_list.append(bn_layer)
@@ -182,8 +183,16 @@ def bn_relu_conv_layer(input_layer, filter_shape, stride, monitored_tensor_list)
     
     #monitored_tensor_list.append(input_layer)
     #monitored_tensor_list.append(bn_layer)
-    monitored_tensor_list.append(relu_layer)
-    monitored_tensor_list.append(conv_layer)
+    filter_size = filter.get_shape().as_list()[0]
+    out_channel_size = filter.get_shape().as_list()[3]
+    im2col_data = tf.extract_image_patches(relu_layer,
+                                         [1,filter_size, filter_size, 1],
+                                         [1, stride, stride, 1], [1, 1, 1, 1],
+                                         padding='SAME')
+    if out_channel_size >= 256:
+      monitored_tensor_list.append(im2col_data)
+    #monitored_tensor_list.append(relu_layer)
+    #monitored_tensor_list.append(conv_layer)
     return conv_layer, monitored_tensor_list
 
 
@@ -386,7 +395,8 @@ def train(total_loss, tensor_list, global_step):
   """
 
   retrieve_list = sparsity_util.sparsity_hook_forward(tensor_list)
-  grad_retrieve_list = sparsity_util.sparsity_hook_backward(total_loss, tensor_list)
+  #grad_retrieve_list = sparsity_util.sparsity_hook_backward(total_loss, tensor_list)
+  grad_retrieve_list = []
   retrieve_list = retrieve_list + grad_retrieve_list
   print("LOG: Retrieved lists:")
   for t in retrieve_list:

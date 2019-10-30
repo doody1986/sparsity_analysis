@@ -39,6 +39,7 @@ from __future__ import print_function
 from datetime import datetime
 import time
 import collections
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -136,7 +137,7 @@ def train():
         return tf.train.SessionRunArgs(selected_list)  # Asks for loss value.
 
       def after_run(self, run_context, run_values):
-        self.monitor.scheduler_after(run_values.results, self._step)
+        self.monitor.scheduler_after(run_values.results, self._step, os.getcwd(), FLAGS.file_io)
 
     sparsity_summary_op = tf.summary.merge_all()
     summary_writer = tf.summary.FileWriter(FLAGS.sparsity_dir, g)
@@ -146,7 +147,7 @@ def train():
         checkpoint_dir=FLAGS.train_dir,
         hooks=[tf.train.StopAtStepHook(last_step=FLAGS.max_steps),
                tf.train.NanTensorHook(loss),
-               #tf.train.SummarySaverHook(save_steps=FLAGS.log_frequency, summary_writer=summary_writer, summary_op=sparsity_summary_op),
+               tf.train.SummarySaverHook(save_steps=1, summary_writer=summary_writer, summary_op=sparsity_summary_op),
                _LoggerHook(),
                _SparsityHook()],
         config=tf.ConfigProto(
