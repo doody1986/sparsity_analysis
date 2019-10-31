@@ -172,7 +172,7 @@ def inference(images):
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 3, 64], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
         conv1_1 = tf.nn.relu(pre_activation, name="relu")
-        #monitored_tensor_list.append(conv1_1)
+        monitored_tensor_list.append(conv1_1)
 
     # conv 1.2
     with tf.variable_scope('conv1_2') as scope:
@@ -183,14 +183,14 @@ def inference(images):
 
     # pool1
     pool1 = tf.nn.max_pool(conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
-    #monitored_tensor_list.append(pool1)
+    monitored_tensor_list.append(pool1)
     
     # conv 2.1
     with tf.variable_scope('conv2_1') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 64, 128], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool1, kernel, [1, 1, 1, 1], padding='SAME')
         conv2_1 = tf.nn.relu(pre_activation, name="relu")
-        #monitored_tensor_list.append(conv2_1)
+        monitored_tensor_list.append(conv2_1)
 
     # conv 2.2
     with tf.variable_scope('conv2_2') as scope:
@@ -201,7 +201,7 @@ def inference(images):
 
     # pool2
     pool2 = tf.nn.max_pool(conv2_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
-    #monitored_tensor_list.append(pool2)
+    monitored_tensor_list.append(pool2)
 
 
     # conv 3.1
@@ -209,7 +209,7 @@ def inference(images):
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 128, 256], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool2, kernel, [1, 1, 1, 1], padding='SAME')
         conv3_1 = tf.nn.relu(pre_activation, name="relu")
-        #monitored_tensor_list.append(conv3_1)
+        monitored_tensor_list.append(conv3_1)
 
     # conv 3.2
     with tf.variable_scope('conv3_2') as scope:
@@ -227,14 +227,14 @@ def inference(images):
 
     # pool3
     pool3 = tf.nn.max_pool(conv3_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool3')
-    #monitored_tensor_list.append(pool3)
+    monitored_tensor_list.append(pool3)
 
     # conv 4.1
     with tf.variable_scope('conv4_1') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool3, kernel, [1, 1, 1, 1], padding='SAME')
         conv4_1 = tf.nn.relu(pre_activation, name="relu")
-        #monitored_tensor_list.append(conv4_1)
+        monitored_tensor_list.append(conv4_1)
 
     # conv 4.2
     with tf.variable_scope('conv4_2') as scope:
@@ -252,7 +252,7 @@ def inference(images):
 
     # pool4
     pool4 = tf.nn.max_pool(conv4_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool4')
-    #monitored_tensor_list.append(pool4)
+    monitored_tensor_list.append(pool4)
 
     # conv 5.1
     with tf.variable_scope('conv5_1') as scope:
@@ -263,7 +263,7 @@ def inference(images):
         #                                 [1, 3, 3, 1],
         #                                 [1, 1, 1, 1], [1, 1, 1, 1],
         #                                 padding='SAME')
-        #monitored_tensor_list.append(conv5_1)
+        monitored_tensor_list.append(conv5_1)
 
     # conv 5.2
     with tf.variable_scope('conv5_2') as scope:
@@ -281,7 +281,7 @@ def inference(images):
 
     # pool5
     pool5 = tf.nn.max_pool(conv5_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool5')
-    #monitored_tensor_list.append(pool5)
+    monitored_tensor_list.append(pool5)
 
     # dense1
     with tf.variable_scope('dense1') as scope:
@@ -291,7 +291,7 @@ def inference(images):
         weights = _variable_with_weight_decay('weights', shape=[dim, 4096], stddev=np.sqrt(1/float(dim)), wd=0.004, isconv=False)
         biases = _variable_on_cpu('biases', [4096], tf.constant_initializer(0.0))
         dense1 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name="relu")
-        #monitored_tensor_list.append(dense1)
+        monitored_tensor_list.append(dense1)
         
 
     # dense2
