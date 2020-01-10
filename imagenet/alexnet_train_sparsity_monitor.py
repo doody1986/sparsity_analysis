@@ -38,52 +38,68 @@ from __future__ import print_function
 
 from datetime import datetime
 import time
+import collections
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.colors import ListedColormap
+from matplotlib.colors import BoundaryNorm
 
 import tensorflow as tf
 
-import vggnet 
+import alexnet 
+import sparsity_util
+import sparsity_monitor
 
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
+tf.app.flags.DEFINE_string('train_dir', '/tmp/imagenet_alexnet_train',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 tf.app.flags.DEFINE_integer('max_steps', 10000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
-tf.app.flags.DEFINE_integer('log_frequency', 1,
+tf.app.flags.DEFINE_integer('log_frequency', 100,
                             """How often to log results to the console.""")
-
+tf.app.flags.DEFINE_string('sparsity_dir', '/tmp/imagenet_alexnet_sparsity',
+                           """Directory where to write summaries""")
+tf.app.flags.DEFINE_integer('monitor_interval', 10,
+                           """The interval of monitoring sparsity""")
+tf.app.flags.DEFINE_integer('monitor_period', 500,
+                           """The period of monitoring sparsity""")
+tf.app.flags.DEFINE_boolean('file_io', False,
+                           """Weather or not log the animation for tracking
+                           the change of spatial pattern and output results to file""")
+tf.app.flags.DEFINE_string('io_path', 'alexnet_500Kiter',
+                           """Directory where to write sparsity log""")
 
 def train():
   """Train CIFAR-10 for a number of steps."""
   with tf.Graph().as_default() as g:
-    global_step = tf.compat.v1.train.get_or_create_global_step()
+    global_step = tf.train.get_or_create_global_step()
 
     # Get images and labels for CIFAR-10.
     # Force input pipeline to CPU:0 to avoid operations sometimes ending up on
     # GPU and resulting in a slow down.
     with tf.device('/cpu:0'):
-      images, labels = vggnet.distorted_inputs()
+      images, labels = alexnet.distorted_inputs()
 
     # Build a Graph that computes the logits predictions from the
     # inference model.
-    logits, tensor_list = vggnet.inference(images)
-
-    #increment_global_step_op = tf.assign(global_step, global_step+1)
+    logits, tensor_list = alexnet.inference(images)
 
     # Calculate loss.
-    loss = vggnet.loss(logits, labels)
-    #loss = tf.constant(0.0)
+    loss = alexnet.loss(logits, labels)
 
     # Build a Graph that trains the model with one batch of examples and
     # updates the model parameters.
-    train_op, _ = vggnet.train(loss, tensor_list, global_step)
+    train_op, retrieve_list = alexnet.train(loss, tensor_list, global_step)
 
     class _LoggerHook(tf.train.SessionRunHook):
       """Logs loss and runtime."""
@@ -111,22 +127,41 @@ def train():
           print (format_str % (datetime.now(), self._step, loss_value,
                                examples_per_sec, sec_per_batch))
 
-    summary_op = tf.summary.merge_all()
-    summary_writer = tf.summary.FileWriter(FLAGS.train_dir, g)
+    class _SparsityHook(tf.train.SessionRunHook):
+      """Logs loss and runtime."""
+
+      def begin(self):
+       self._step = -1
+       mode = sparsity_monitor.Mode.monitor
+       data_format = "NHWC"
+       self.monitor = sparsity_monitor.SparsityMonitor(mode, data_format, FLAGS.monitor_interval,\
+                                                       FLAGS.monitor_period, retrieve_list)
+
+      def before_run(self, run_context):
+        self._step += 1
+        selected_list = self.monitor.scheduler_before(self._step)
+        return tf.train.SessionRunArgs(selected_list)  # Asks for loss value.
+
+      def after_run(self, run_context, run_values):
+        self.monitor.scheduler_after(run_values.results, self._step, os.getcwd()+'/'+FLAGS.io_path, FLAGS.file_io)
+
+    sparsity_summary_op = tf.summary.merge_all()
+    summary_writer = tf.summary.FileWriter(FLAGS.sparsity_dir, g)
 
     start = time.time()
     with tf.train.MonitoredTrainingSession(
         checkpoint_dir=FLAGS.train_dir,
         hooks=[tf.train.StopAtStepHook(last_step=FLAGS.max_steps),
                tf.train.NanTensorHook(loss),
-               #tf.train.SummarySaverHook(save_steps=1, summary_writer=summary_writer, summary_op=summary_op),
-               _LoggerHook()],
+               #tf.train.SummarySaverHook(save_steps=1, summary_writer=summary_writer, summary_op=sparsity_summary_op),
+               _LoggerHook(),
+               _SparsityHook()],
         config=tf.ConfigProto(
             log_device_placement=FLAGS.log_device_placement)) as mon_sess:
       while not mon_sess.should_stop():
         mon_sess.run(train_op)
     end = time.time()
-    print (end - start)
+    print(end - start)
 
 
 def main(argv=None):  # pylint: disable=unused-argument

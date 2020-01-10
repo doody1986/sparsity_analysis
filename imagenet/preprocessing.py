@@ -160,7 +160,7 @@ def eval_image(image, height, width, bbox, thread_id, resize_method):
       distorted_image = tf.image.crop_to_bounding_box(image, y0, x0, height,
                                                       width)
     else:
-      sample_distorted_bounding_box = tf.image.sample_distorted_bounding_box(
+      sample_distorted_bounding_box = tf.image.sample_distorted_bounding_box_v2(
           tf.shape(image),
           bounding_boxes=bbox,
           min_object_covered=0.1,
@@ -176,15 +176,15 @@ def eval_image(image, height, width, bbox, thread_id, resize_method):
       # This resizing operation may distort the images because the aspect
       # ratio is not respected.
       if cnn_util.tensorflow_version() >= 11:
-        distorted_image = tf.image.resize_images(
+        distorted_image = tf.image.resize(
             distorted_image, [height, width],
             image_resize_method,
             align_corners=False)
       else:
-        distorted_image = tf.image.resize_images(
+        distorted_image = tf.image.resize(
             distorted_image,
-            height,
-            width,
+            [height, width],
+            #width,
             image_resize_method,
             align_corners=False)
     distorted_image.set_shape([height, width, 3])
@@ -266,6 +266,7 @@ def train_image(image,
     distorted_image = tf.image.resize(
         distorted_image,
         [height, width],
+        #height,
         #width,
         image_resize_method,
         align_corners=False)

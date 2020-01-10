@@ -47,12 +47,12 @@ from matplotlib.colors import BoundaryNorm
 
 import tensorflow as tf
 
-import vggnet
+import alexnet
 import block_sparsity_util
 
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -148,18 +148,18 @@ def train():
     # Force input pipeline to CPU:0 to avoid operations sometimes ending up on
     # GPU and resulting in a slow down.
     with tf.device('/cpu:0'):
-      images, labels = vggnet.distorted_inputs()
+      images, labels = alexnet.distorted_inputs()
 
     # Build a Graph that computes the logits predictions from the
     # inference model.
-    logits, tensor_list = vggnet.inference(images)
+    logits, tensor_list = alexnet.inference(images)
 
     # Calculate loss.
-    loss = vggnet.loss(logits, labels)
+    loss = alexnet.loss(logits, labels)
 
     # Build a Graph that trains the model with one batch of examples and
     # updates the model parameters.
-    train_op, retrieve_list = vggnet.train(loss, tensor_list, global_step)
+    train_op, retrieve_list = alexnet.train(loss, tensor_list, global_step)
 
     class _LoggerHook(tf.train.SessionRunHook):
       """Logs loss and runtime."""

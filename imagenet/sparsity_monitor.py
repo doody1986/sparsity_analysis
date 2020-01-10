@@ -92,7 +92,7 @@ class SparsityMonitor:
     self._hibernation_sparsity_history_length = 3
     self._hibernation_cond_sparsity_difference = 0.1
     self._hibernation_sparsity_history_length = 10
-    self._initial_sparsity = 0.5
+    self._initial_sparsity = 0.3
     self._sparsity_threshold_list = np.arange(self._initial_sparsity, 1, 0.1)
     self._first_sparse_stage_idx = 0
     self._second_sparse_stage_idx = 1

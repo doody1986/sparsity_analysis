@@ -21,7 +21,7 @@ def sparsity_hook_forward(x_list):
   for x in x_list:
     tensor_name = x.op.name
     sparsity = tf.nn.zero_fraction(x)
-    tf.summary.scalar(tensor_name + '/sparsity', sparsity)
+    tf.compat.v1.summary.scalar(tensor_name + '/sparsity', sparsity)
     retrieve_list.append((x, sparsity))
   return retrieve_list
 
@@ -43,7 +43,7 @@ def sparsity_hook_backward(loss, x_list):
   for g in gradient_list:
     tensor_name = g.op.name
     sparsity = tf.nn.zero_fraction(g)
-    tf.summary.scalar(tensor_name + '/sparsity', sparsity)
+    tf.compat.v1.summary.scalar(tensor_name + '/sparsity', sparsity)
     grad_retrieve_list.append((g, sparsity))
   return grad_retrieve_list
 
@@ -113,8 +113,8 @@ def zero_block_ratio_matrix(a, shape, block_size):
     n_row = shape[0].value
     n_col = shape[1].value * shape[2].value * shape[3].value
     matrix = a.reshape((n_row, n_col))
-  n_block_row = int(n_row + block_size - 1) / int(block_size)
-  n_block_col = int(n_col + block_size - 1) / int(block_size)
+  n_block_row = int(n_row + block_size - 1) // int(block_size)
+  n_block_col = int(n_col + block_size - 1) // int(block_size)
 
   n_blocks = n_block_row * n_block_col
 

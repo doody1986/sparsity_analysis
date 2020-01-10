@@ -41,7 +41,7 @@ import time
 
 import tensorflow as tf
 
-import vggnet 
+import resnet 
 
 import os
 
@@ -49,7 +49,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
+tf.app.flags.DEFINE_string('train_dir', '/tmp/imagenet_resnet_train',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 tf.app.flags.DEFINE_integer('max_steps', 10000,
@@ -69,21 +69,21 @@ def train():
     # Force input pipeline to CPU:0 to avoid operations sometimes ending up on
     # GPU and resulting in a slow down.
     with tf.device('/cpu:0'):
-      images, labels = vggnet.distorted_inputs()
+      images, labels = resnet.distorted_inputs()
 
     # Build a Graph that computes the logits predictions from the
     # inference model.
-    logits, tensor_list = vggnet.inference(images)
+    logits, tensor_list = resnet.inference(images)
 
     #increment_global_step_op = tf.assign(global_step, global_step+1)
 
     # Calculate loss.
-    loss = vggnet.loss(logits, labels)
+    loss = resnet.loss(logits, labels)
     #loss = tf.constant(0.0)
 
     # Build a Graph that trains the model with one batch of examples and
     # updates the model parameters.
-    train_op, _ = vggnet.train(loss, tensor_list, global_step)
+    train_op, _ = resnet.train(loss, tensor_list, global_step)
 
     class _LoggerHook(tf.train.SessionRunHook):
       """Logs loss and runtime."""

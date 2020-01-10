@@ -156,7 +156,7 @@ def inputs(eval_data):
   return images, labels
 
 def inference(images):
-    """Build the VGG-16 model.
+    """Build the AlexNet model.
     Args:
         images: Images returned from distorted_inputs() or inputs().
     Returns:
@@ -168,126 +168,56 @@ def inference(images):
     # If we only ran this model on a single GPU, we could simplify this function
     # by replacing all instances of tf.get_variable() with tf.Variable().
     #
-    # conv 1.1
-    with tf.compat.v1.variable_scope('conv1_1') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 3, 64], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
-        conv1_1 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv1_1)
-
-    # conv 1.2
-    with tf.variable_scope('conv1_2') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 64, 64], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(conv1_1, kernel, [1, 1, 1, 1], padding='SAME')
-        conv1_2 = tf.nn.relu(pre_activation, name="relu")
-        #monitored_tensor_list.append(conv1_2)
+    # conv 1
+    with tf.compat.v1.variable_scope('conv1') as scope:
+        kernel = _variable_with_weight_decay('weights', shape=[11, 11, 3, 96], stddev=5e-2, wd=WEIGHT_DECAY)
+        pre_activation = tf.nn.conv2d(images, kernel, [1, 4, 4, 1], padding='VALID')
+        conv1 = tf.nn.relu(pre_activation, name="relu")
 
     # pool1
-    pool1 = tf.nn.max_pool2d(conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
+    pool1 = tf.nn.max_pool2d(conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
     monitored_tensor_list.append(pool1)
-    
-    # conv 2.1
-    with tf.variable_scope('conv2_1') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 64, 128], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(pool1, kernel, [1, 1, 1, 1], padding='SAME')
-        conv2_1 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv2_1)
 
-    # conv 2.2
-    with tf.variable_scope('conv2_2') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 128, 128], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(conv2_1, kernel, [1, 1, 1, 1], padding='SAME')
-        conv2_2 = tf.nn.relu(pre_activation, name="relu")
-        #monitored_tensor_list.append(conv2_2)
+    # conv 2
+    with tf.variable_scope('conv2') as scope:
+        kernel = _variable_with_weight_decay('weights', shape=[5, 5, 96, 256], stddev=5e-2, wd=WEIGHT_DECAY)
+        pre_activation = tf.nn.conv2d(pool1, kernel, [1, 1, 1, 1], padding='SAME')
+        conv2 = tf.nn.relu(pre_activation, name="relu")
+        #monitored_tensor_list.append(conv2)
 
     # pool2
-    pool2 = tf.nn.max_pool2d(conv2_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
+    pool2 = tf.nn.max_pool2d(conv2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
     monitored_tensor_list.append(pool2)
-
-
-    # conv 3.1
-    with tf.variable_scope('conv3_1') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 128, 256], stddev=5e-2, wd=WEIGHT_DECAY)
+    
+    # conv 3
+    with tf.variable_scope('conv3') as scope:
+        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 256], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool2, kernel, [1, 1, 1, 1], padding='SAME')
-        conv3_1 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv3_1)
+        conv3 = tf.nn.relu(pre_activation, name="relu")
+        monitored_tensor_list.append(conv3)
 
-    # conv 3.2
-    with tf.variable_scope('conv3_2') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 256], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(conv3_1, kernel, [1, 1, 1, 1], padding='SAME')
-        conv3_2 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv3_2)
+    # conv 4
+    with tf.variable_scope('conv4') as scope:
+        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 384], stddev=5e-2, wd=WEIGHT_DECAY)
+        pre_activation = tf.nn.conv2d(conv3, kernel, [1, 1, 1, 1], padding='SAME')
+        conv4 = tf.nn.relu(pre_activation, name="relu")
+        monitored_tensor_list.append(conv4)
 
-    # conv 3.3
-    with tf.variable_scope('conv3_3') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 256], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(conv3_2, kernel, [1, 1, 1, 1], padding='SAME')
-        conv3_3 = tf.nn.relu(pre_activation, name="relu")
-        #monitored_tensor_list.append(conv3_3)
+    # conv 5
+    with tf.variable_scope('conv5') as scope:
+        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 384, 256], stddev=5e-2, wd=WEIGHT_DECAY)
+        pre_activation = tf.nn.conv2d(conv4, kernel, [1, 1, 1, 1], padding='SAME')
+        conv5 = tf.nn.relu(pre_activation, name="relu")
+        #monitored_tensor_list.append(conv5)
 
     # pool3
-    pool3 = tf.nn.max_pool2d(conv3_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool3')
+    pool3 = tf.nn.max_pool2d(conv5, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool3')
     monitored_tensor_list.append(pool3)
-
-    # conv 4.1
-    with tf.variable_scope('conv4_1') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 512], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(pool3, kernel, [1, 1, 1, 1], padding='SAME')
-        conv4_1 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv4_1)
-
-    # conv 4.2
-    with tf.variable_scope('conv4_2') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(conv4_1, kernel, [1, 1, 1, 1], padding='SAME')
-        conv4_2 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv4_2)
-
-    # conv 4.3
-    with tf.variable_scope('conv4_3') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(conv4_2, kernel, [1, 1, 1, 1], padding='SAME')
-        conv4_3 = tf.nn.relu(pre_activation, name="relu")
-        #monitored_tensor_list.append(conv4_3)
-
-    # pool4
-    pool4 = tf.nn.max_pool2d(conv4_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool4')
-    monitored_tensor_list.append(pool4)
-
-    # conv 5.1
-    with tf.variable_scope('conv5_1') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(pool4, kernel, [1, 1, 1, 1], padding='SAME')
-        conv5_1 = tf.nn.relu(pre_activation, name="relu")
-        #im2col_conv51data = tf.extract_image_patches(conv5_1,
-        #                                 [1, 3, 3, 1],
-        #                                 [1, 1, 1, 1], [1, 1, 1, 1],
-        #                                 padding='SAME')
-        monitored_tensor_list.append(conv5_1)
-
-    # conv 5.2
-    with tf.variable_scope('conv5_2') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(conv5_1, kernel, [1, 1, 1, 1], padding='SAME')
-        conv5_2 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv5_2)
-
-    # conv 5.3
-    with tf.variable_scope('conv5_3') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
-        pre_activation = tf.nn.conv2d(conv5_2, kernel, [1, 1, 1, 1], padding='SAME')
-        conv5_3 = tf.nn.relu(pre_activation, name="relu")
-        #monitored_tensor_list.append(conv5_3)
-
-    # pool5
-    pool5 = tf.nn.max_pool2d(conv5_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool5')
-    monitored_tensor_list.append(pool5)
 
     # dense1
     with tf.variable_scope('dense1') as scope:
         # Move everything into depth so we can perform a single matrix multiply.
-        reshape = tf.reshape(pool5, [images.get_shape().as_list()[0], -1])
+        reshape = tf.reshape(pool3, [images.get_shape().as_list()[0], -1])
         dim = reshape.get_shape()[1].value
         weights = _variable_with_weight_decay('weights', shape=[dim, 4096], stddev=np.sqrt(1/float(dim)), wd=0.004, isconv=False)
         biases = _variable_on_cpu('biases', [4096], tf.constant_initializer(0.0))
@@ -300,7 +230,7 @@ def inference(images):
         weights = _variable_with_weight_decay('weights', shape=[4096, 4096], stddev=np.sqrt(1/4096.0), wd=0.004, isconv=False)
         biases = _variable_on_cpu('biases', [4096], tf.constant_initializer(0.0))
         dense2 = tf.nn.relu(tf.matmul(dense1, weights) + biases, name="relu")
-        #monitored_tensor_list.append(dense2)
+        monitored_tensor_list.append(dense2)
 
     # dense3
     with tf.variable_scope('dense3') as scope:
@@ -416,4 +346,5 @@ def train(total_loss, tensor_list, global_step):
     variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
   return variables_averages_op, retrieve_list
+  #return apply_gradient_op, retrieve_list
 

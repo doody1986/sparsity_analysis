@@ -52,6 +52,10 @@ import vggnet
 import sparsity_util
 import sparsity_monitor
 
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('train_dir', '/tmp/imagenet_train',
@@ -159,14 +163,11 @@ def train():
 
 
 def main(argv=None):  # pylint: disable=unused-argument
-  if tf.gfile.Exists(FLAGS.train_dir):
-    tf.gfile.DeleteRecursively(FLAGS.train_dir)
-  tf.gfile.MakeDirs(FLAGS.train_dir)
-  if tf.gfile.Exists(FLAGS.sparsity_dir):
-    tf.gfile.DeleteRecursively(FLAGS.sparsity_dir)
-  tf.gfile.MakeDirs(FLAGS.sparsity_dir)
+  if tf.io.gfile.exists(FLAGS.train_dir):
+    tf.io.gfile.rmtree(FLAGS.train_dir)
+  tf.io.gfile.makedirs(FLAGS.train_dir)
   train()
 
 
 if __name__ == '__main__':
-  tf.app.run()
+  tf.compat.v1.app.run()
