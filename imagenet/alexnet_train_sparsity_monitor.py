@@ -76,8 +76,10 @@ tf.app.flags.DEFINE_integer('monitor_period', 500,
 tf.app.flags.DEFINE_boolean('file_io', False,
                            """Weather or not log the animation for tracking
                            the change of spatial pattern and output results to file""")
-tf.app.flags.DEFINE_string('io_path', 'alexnet_500Kiter',
+tf.app.flags.DEFINE_string('io_path', 'alexnet_realdata',
                            """Directory where to write sparsity log""")
+tf.app.flags.DEFINE_string('model', 'alexnet',
+                           """Model Type""")
 
 def train():
   """Train CIFAR-10 for a number of steps."""
@@ -143,7 +145,7 @@ def train():
         return tf.train.SessionRunArgs(selected_list)  # Asks for loss value.
 
       def after_run(self, run_context, run_values):
-        self.monitor.scheduler_after(run_values.results, self._step, os.getcwd()+'/'+FLAGS.io_path, FLAGS.file_io)
+        self.monitor.scheduler_after(run_values.results, self._step, FLAGS.model, os.getcwd()+'/'+FLAGS.io_path, FLAGS.file_io)
 
     sparsity_summary_op = tf.summary.merge_all()
     summary_writer = tf.summary.FileWriter(FLAGS.sparsity_dir, g)

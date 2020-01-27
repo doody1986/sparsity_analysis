@@ -27,7 +27,16 @@ from matplotlib.colors import ListedColormap
 from matplotlib.colors import BoundaryNorm
 import os.path
 from enum import Enum
+import re
 
+tensorname_regex = re.compile(r"(?:.*\/)?([a-z0-9]+)_?\d?:\w+")
+
+problem_size_map = collections.OrderedDict()
+problem_size_map['alexnet'] = collections.OrderedDict()
+problem_size_map['alexnet']['pool1'] = [0.5, 0.55, 0.6, 0.65]
+problem_size_map['alexnet']['pool2'] = [0.45, 0.5, 0.55, 0.6]
+problem_size_map['alexnet']['conv3'] = [0.5, 0.55, 0.6]
+problem_size_map['alexnet']['conv4'] = [0.5, 0.55, 0.6]
 
 class Mode(Enum):
   monitor = 0
@@ -62,6 +71,13 @@ class MonitoredTensorInfo:
     self._sparsity_history = []
     self._stage = SparseStage.dense
     self._monitor_period = 0
+    self._real_data_extracted = False
+    self._flag_map = collections.OrderedDict()
+    self._flag_map['alexnet'] = collections.OrderedDict()
+    self._flag_map['alexnet']['pool1'] = [False, False, False, False]
+    self._flag_map['alexnet']['pool2'] = [False, False, False, False]
+    self._flag_map['alexnet']['conv3'] = [False, False, False]
+    self._flag_map['alexnet']['conv4'] = [False, False, False]
 
   def reset(self):
     self._sparsity = -1.0
@@ -71,6 +87,12 @@ class MonitoredTensorInfo:
     self._fd = None
     self._results_str = "Monitor session for tensor %s finished: global step: %d\nStatus: %s\nSparsity stage: %s\nMonitor period: %d\nAveraged sparsity = %.2f\nAveraged zero block ratio = %.2f\n"
     self._enabled = False
+    self._flag_map = collections.OrderedDict()
+    self._flag_map['alexnet'] = collections.OrderedDict()
+    self._flag_map['alexnet']['pool1'] = [False, False, False, False]
+    self._flag_map['alexnet']['pool2'] = [False, False, False, False]
+    self._flag_map['alexnet']['conv3'] = [False, False, False]
+    self._flag_map['alexnet']['conv4'] = [False, False, False]
 
 class SparsityMonitor:
   def __init__(self, mode, data_format,
@@ -234,7 +256,10 @@ class SparsityMonitor:
     ax.set_xlabel(label)
     return mesh,
 
-  def results_io(self, tensor_idx, workpath, enable_file_io):
+  def results_io(self, tensor_idx, workpath, enable_file_io, model):
+    if model == '':
+      print('The model parameter is empty')
+      exit()
     stage = self._sparsity_info[tensor_idx]._stage
     
     if stage == SparseStage.first_stage:
@@ -250,36 +275,55 @@ class SparsityMonitor:
 
     if enable_file_io:
       # Output results
-      tensor_name = self._sparsity_info[tensor_idx]._data_tensor.name
-      file_name = tensor_name.replace('/', '_').replace(':', '_') + '.txt'
-      self._sparsity_info[tensor_idx]._fd = open(workpath+'/'+file_name, 'a')
-      self._sparsity_info[tensor_idx]._fd.write(self._sparsity_info[tensor_idx]._results_str)
-      self._sparsity_info[tensor_idx]._fd.close()
+      enable_results = False
+      if enable_results:
+        tensor_name = self._sparsity_info[tensor_idx]._data_tensor.name
+        file_name = tensor_name.replace('/', '_').replace(':', '_') + '.txt'
+        self._sparsity_info[tensor_idx]._fd = open(workpath+'/'+file_name, 'a')
+        self._sparsity_info[tensor_idx]._fd.write(self._sparsity_info[tensor_idx]._results_str)
+        self._sparsity_info[tensor_idx]._fd.close()
 
       # Output data
-      enable_data_file = False
+      enable_data_file = True 
       if enable_data_file:
-        data = self._sparsity_info[tensor_idx]._extracted_data_list[0]
-        batch_size = data.shape[0]
-        output_h = data.shape[1]
-        output_w = data.shape[2]
-        col_size = data.shape[3]
-        data = np.reshape(data, batch_size*output_h*output_w*col_size)
+        # Only deal with the first data within a monitor interval
+        tensor_name = self._sparsity_info[tensor_idx]._data_tensor.name
+        tensorkey = ''
+        if tensorname_regex.match(tensor_name):
+          tensorkey = tensorname_regex.match(tensor_name).group(1)
+        if tensorkey == '':
+          print("Tensor name unavailable")
+          exit()
+        sparsities = problem_size_map[model][tensorkey]
+        interval_threshold = 0.025
+        for i in range(len(sparsities)):
+          sp = sparsities[i]
+          curr_sp = self._sparsity_info[tensor_idx]._sparsity
+          curr_flag = self._sparsity_info[tensor_idx]._flag_map[model][tensorkey][i]
+          if not curr_flag:
+            if curr_sp < sp + interval_threshold and curr_sp >= sp - interval_threshold:
+              data = self._sparsity_info[tensor_idx]._extracted_data_list[0]
+              batch_size = data.shape[0]
+              output_h = data.shape[1]
+              output_w = data.shape[2]
+              col_size = data.shape[3]
+              data = np.reshape(data, batch_size*output_h*output_w*col_size)
 
-        file_name = tensor_name.replace('/', '_').replace(':', '_') + \
-                    str(batch_size)+'_'+str(output_h)+'_'+str(output_w)+'_'+str(col_size)+'.data'
-        file_name = workpath+'/'+file_name
-        if not os.path.isfile(file_name):
-          self._sparsity_info[tensor_idx]._fd = open(file_name, 'w')
-          data.tofile(self._sparsity_info[tensor_idx]._fd, "\n")
-          self._sparsity_info[tensor_idx]._fd.close()
+              file_name = model+'_'+tensorkey+'_'+str(int(sp*100))+'.data'
+              #file_name = workpath+'/'+file_name
+              if not os.path.isfile(file_name):
+                self._sparsity_info[tensor_idx]._fd = open(file_name, 'w')
+                data.tofile(self._sparsity_info[tensor_idx]._fd, "\n")
+                self._sparsity_info[tensor_idx]._fd.close()
+              self._sparsity_info[tensor_idx]._flag_map[model][tensorkey][i] = True
 
-      # Plot the data pattern
-      figure_name = tensor_name.replace('/', '_').replace(':', '_') +\
-                    stage_str
-
+      # Enable gif generation
       enable_gif = False
       if enable_gif and not os.path.isfile(figure_name):
+        # Plot the data pattern
+        figure_name = tensor_name.replace('/', '_').replace(':', '_') +\
+                      stage_str
+
         fig, ax = plt.subplots()
         num_frames = len(self._sparsity_info[tensor_idx]._extracted_data)
         ani = animation.FuncAnimation(fig, animate, frames=num_frames,
@@ -321,7 +365,7 @@ class SparsityMonitor:
     # Return the data list that needed for monitoring
     return self._monitor_enabled_tensor_list
 
-  def scheduler_after(self, value_list, global_step, workpath="", enable_file_io=False):
+  def scheduler_after(self, value_list, global_step, model, workpath="", enable_file_io=False):
     # Time CONSUMING part is here
     if self._mode == Mode.monitor:
       self.__collect_and_monitoring(value_list)
@@ -348,7 +392,7 @@ class SparsityMonitor:
 
         # Call file IO utility here
         self.update_results(global_step, i)
-        self.results_io(i, workpath, enable_file_io)
+        self.results_io(i, workpath, enable_file_io, model)
 
         # Reset the sparsity info for next period
         self._sparsity_info[i].reset()

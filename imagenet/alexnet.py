@@ -47,7 +47,7 @@ import sparsity_util
 FLAGS = tf.app.flags.FLAGS
 
 # Basic model parameters.
-tf.app.flags.DEFINE_integer('batch_size', 64,
+tf.app.flags.DEFINE_integer('batch_size', 128,
                             """Number of images to process in a batch.""")
 tf.app.flags.DEFINE_string('data_dir', '/imagenet/tf/train',
                            """Path to the ImageNet data directory.""")
@@ -176,7 +176,13 @@ def inference(images):
 
     # pool1
     pool1 = tf.nn.max_pool2d(conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
-    monitored_tensor_list.append(pool1)
+    im2col_pool1 = tf.extract_image_patches(pool1,
+                                         [1, 5, 5, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='pool1')
+    monitored_tensor_list.append(im2col_pool1)
+    #monitored_tensor_list.append(pool1)
 
     # conv 2
     with tf.variable_scope('conv2') as scope:
@@ -187,21 +193,36 @@ def inference(images):
 
     # pool2
     pool2 = tf.nn.max_pool2d(conv2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
-    monitored_tensor_list.append(pool2)
+    im2col_pool2 = tf.extract_image_patches(pool2,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME', name='pool2')
+    monitored_tensor_list.append(im2col_pool2)
+    #monitored_tensor_list.append(pool2)
     
     # conv 3
     with tf.variable_scope('conv3') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 256], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool2, kernel, [1, 1, 1, 1], padding='SAME')
         conv3 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv3)
+        im2col_conv3 = tf.extract_image_patches(conv3,
+                                             [1, 3, 3, 1],
+                                             [1, 1, 1, 1], [1, 1, 1, 1],
+                                             padding='SAME', name='conv3')
+        monitored_tensor_list.append(im2col_conv3)
+        #monitored_tensor_list.append(conv3)
 
     # conv 4
     with tf.variable_scope('conv4') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 384], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv3, kernel, [1, 1, 1, 1], padding='SAME')
         conv4 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv4)
+        im2col_conv4 = tf.extract_image_patches(conv4,
+                                             [1, 3, 3, 1],
+                                             [1, 1, 1, 1], [1, 1, 1, 1],
+                                             padding='SAME', name='conv4')
+        monitored_tensor_list.append(im2col_conv4)
+        #monitored_tensor_list.append(conv4)
 
     # conv 5
     with tf.variable_scope('conv5') as scope:
@@ -212,7 +233,7 @@ def inference(images):
 
     # pool3
     pool3 = tf.nn.max_pool2d(conv5, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool3')
-    monitored_tensor_list.append(pool3)
+    #monitored_tensor_list.append(pool3)
 
     # dense1
     with tf.variable_scope('dense1') as scope:
@@ -222,7 +243,7 @@ def inference(images):
         weights = _variable_with_weight_decay('weights', shape=[dim, 4096], stddev=np.sqrt(1/float(dim)), wd=0.004, isconv=False)
         biases = _variable_on_cpu('biases', [4096], tf.constant_initializer(0.0))
         dense1 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name="relu")
-        monitored_tensor_list.append(dense1)
+        #monitored_tensor_list.append(dense1)
         
 
     # dense2
@@ -230,7 +251,7 @@ def inference(images):
         weights = _variable_with_weight_decay('weights', shape=[4096, 4096], stddev=np.sqrt(1/4096.0), wd=0.004, isconv=False)
         biases = _variable_on_cpu('biases', [4096], tf.constant_initializer(0.0))
         dense2 = tf.nn.relu(tf.matmul(dense1, weights) + biases, name="relu")
-        monitored_tensor_list.append(dense2)
+        #monitored_tensor_list.append(dense2)
 
     # dense3
     with tf.variable_scope('dense3') as scope:
