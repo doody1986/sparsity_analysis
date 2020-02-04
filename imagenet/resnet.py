@@ -169,13 +169,21 @@ def bn_relu_conv_layer(input_layer, filter_shape, stride, monitored_tensor_list)
     conv_layer = tf.nn.conv2d(relu_layer, filter, strides=[1, stride, stride, 1], padding='SAME')
     
     filter_size = filter.get_shape().as_list()[0]
-    out_channel_size = filter.get_shape().as_list()[3]
-    #im2col_data = tf.extract_image_patches(relu_layer,
-    #                                     [1,filter_size, filter_size, 1],
-    #                                     [1, stride, stride, 1], [1, 1, 1, 1],
-    #                                     padding='SAME')
-    #monitored_tensor_list.append(im2col_data)
-    monitored_tensor_list.append(relu_layer)
+    scope_name = tf.get_default_graph().get_name_scope()
+    if 'rb' in scope_name:
+      out_channel_size = filter.get_shape().as_list()[3]
+      num_batches_needed = 4
+      if 'rb2' in scope_name:
+        num_batches_needed = 16
+      elif 'rb3' in scope_name or 'rb4' in scope_name:
+        num_batches_needed = 64
+      sliced_relu = tf.slice(relu_layer, [0, 0, 0, 0], [num_batches_needed, relu_layer.shape[1], relu_layer.shape[2], relu_layer.shape[3]])
+      im2col_relu = tf.extract_image_patches(sliced_relu,
+                                           [1,filter_size, filter_size, 1],
+                                           [1, stride, stride, 1], [1, 1, 1, 1],
+                                           padding='SAME', name='im2col')
+      monitored_tensor_list.append(im2col_relu)
+    #monitored_tensor_list.append(relu_layer)
     return conv_layer, monitored_tensor_list
 
 
@@ -201,11 +209,11 @@ def residual_block(input_layer, output_channel, monitored_tensor_list=[]):
         raise ValueError('Output and input channel does not match in residual blocks!!!')
 
     # The first conv layer of the first residual block does not need to be normalized and relu-ed.
-    with tf.variable_scope('conv1_in_block'):
+    with tf.variable_scope('conv1'):
         filter = create_variables(name='conv', shape=[3, 3, input_channel, output_channel])
         conv1 = tf.nn.conv2d(input_layer, filter=filter, strides=[1, stride, stride, 1], padding='SAME')
 
-    with tf.variable_scope('conv2_in_block'):
+    with tf.variable_scope('conv2'):
         conv2 , monitored_tensor_list= bn_relu_conv_layer(conv1, 
                 [3, 3, output_channel, output_channel], 1, 
                 monitored_tensor_list)
@@ -225,8 +233,20 @@ def residual_block(input_layer, output_channel, monitored_tensor_list=[]):
 
     pre_activation = conv2_bn + padded_input
     output = tf.nn.relu(pre_activation)
-    
-    monitored_tensor_list.append(output)
+    scope_name = tf.get_default_graph().get_name_scope()
+    if 'rb' in scope_name:
+      num_batches_needed = 4
+      if 'rb2' in scope_name:
+        num_batches_needed = 16
+      elif 'rb3' in scope_name or 'rb4' in scope_name:
+        num_batches_needed = 64
+      sliced_output = tf.slice(output, [0, 0, 0, 0], [num_batches_needed, output.shape[1], output.shape[2], output.shape[3]])
+      im2col_output = tf.extract_image_patches(sliced_output,
+                                       [1, 3, 3, 1],
+                                       [1, 1, 1, 1], [1, 1, 1, 1],
+                                       padding='SAME', name='im2col')
+      monitored_tensor_list.append(im2col_output)
+    #monitored_tensor_list.append(output)
 
     return output, monitored_tensor_list
 
@@ -243,39 +263,46 @@ def inference(input_tensor_batch, n=[2, 2, 2, 2], reuse=False):
     layers = []
     with tf.variable_scope('conv0', reuse=reuse):
         conv0, monitored_tensor_list = conv_bn_relu_layer(
-                input_tensor_batch, [7, 7, 3, 64], 1,
+                input_tensor_batch, [7, 7, 3, 64], 2,
                 monitored_tensor_list)
         layers.append(conv0)
 
     # pool1
     pool1 = tf.nn.max_pool2d(conv0, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
     layers.append(pool1)
-    monitored_tensor_list.append(pool1)
+    num_batches_needed = 4
+    sliced_pool1 = tf.slice(pool1, [0, 0, 0, 0], [num_batches_needed, pool1.shape[1], pool1.shape[2], pool1.shape[3]])
+    im2col_pool1 = tf.extract_image_patches(sliced_pool1,
+                                 [1, 3, 3, 1],
+                                 [1, 1, 1, 1], [1, 1, 1, 1],
+                                 padding='SAME', name='pool1')
+    monitored_tensor_list.append(im2col_pool1)
+    #monitored_tensor_list.append(pool1)
 
     # First residual block set
     for i in range(n[0]):
-        with tf.variable_scope('conv1_%d' %i, reuse=reuse):
+        with tf.variable_scope('rb1_%d' %i, reuse=reuse):
             conv1, monitored_tensor_list = residual_block(layers[-1], 64,
                     monitored_tensor_list=monitored_tensor_list)
             layers.append(conv1)
 
     # First residual block set
     for i in range(n[1]):
-        with tf.variable_scope('conv2_%d' %i, reuse=reuse):
+        with tf.variable_scope('rb2_%d' %i, reuse=reuse):
             conv2, monitored_tensor_list = residual_block(layers[-1], 128,
                     monitored_tensor_list=monitored_tensor_list)
             layers.append(conv2)
 
     # First residual block set
     for i in range(n[2]):
-        with tf.variable_scope('conv3_%d' %i, reuse=reuse):
+        with tf.variable_scope('rb3_%d' %i, reuse=reuse):
             conv3, monitored_tensor_list = residual_block(layers[-1], 256,
                     monitored_tensor_list=monitored_tensor_list)
             layers.append(conv3)
     
     # First residual block set
     for i in range(n[3]):
-        with tf.variable_scope('conv4_%d' %i, reuse=reuse):
+        with tf.variable_scope('rb4_%d' %i, reuse=reuse):
             conv4, monitored_tensor_list = residual_block(layers[-1], 512,
                     monitored_tensor_list=monitored_tensor_list)
             layers.append(conv4)

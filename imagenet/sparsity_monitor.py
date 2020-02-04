@@ -37,6 +37,24 @@ problem_size_map['alexnet']['pool1'] = [0.5, 0.55, 0.6, 0.65]
 problem_size_map['alexnet']['pool2'] = [0.45, 0.5, 0.55, 0.6]
 problem_size_map['alexnet']['conv3'] = [0.5, 0.55, 0.6]
 problem_size_map['alexnet']['conv4'] = [0.5, 0.55, 0.6]
+problem_size_map['resnet'] = collections.OrderedDict()
+problem_size_map['resnet']['pool1_1'] = [0.4, 0.45]
+problem_size_map['resnet']['rb1_0/conv2/im2col'] = [0.45, 0.5]
+problem_size_map['resnet']['rb1_0/im2col'] = [0.3, 0.35]
+problem_size_map['resnet']['rb1_1/conv2/im2col'] = [0.5]
+problem_size_map['resnet']['rb1_1/im2col'] = [0.3]
+problem_size_map['resnet']['rb2_0/conv2/im2col'] = [0.5]
+problem_size_map['resnet']['rb2_0/im2col'] = [0.4]
+problem_size_map['resnet']['rb2_1/conv2/im2col'] = [0.5]
+problem_size_map['resnet']['rb2_1/im2col'] = [0.3]
+problem_size_map['resnet']['rb3_0/conv2/im2col'] = [0.5]
+problem_size_map['resnet']['rb3_0/im2col'] = [0.35, 0.4]
+problem_size_map['resnet']['rb3_1/conv2/im2col'] = [0.5]
+problem_size_map['resnet']['rb3_1/im2col'] = [0.3, 0.35]
+problem_size_map['resnet']['rb4_0/conv2/im2col'] = [0.5]
+problem_size_map['resnet']['rb4_0/im2col'] = [0.35, 0.4]
+problem_size_map['resnet']['rb4_1/conv2/im2col'] = [0.5]
+problem_size_map['resnet']['rb4_1/im2col'] = [0.3]
 
 class Mode(Enum):
   monitor = 0
@@ -78,6 +96,24 @@ class MonitoredTensorInfo:
     self._flag_map['alexnet']['pool2'] = [False, False, False, False]
     self._flag_map['alexnet']['conv3'] = [False, False, False]
     self._flag_map['alexnet']['conv4'] = [False, False, False]
+    self._flag_map['resnet'] = collections.OrderedDict()
+    self._flag_map['resnet']['pool1_1'] = [False, False]
+    self._flag_map['resnet']['rb1_0/conv2/im2col'] = [False, False]
+    self._flag_map['resnet']['rb1_0/im2col'] = [False, False]
+    self._flag_map['resnet']['rb1_1/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb1_1/im2col'] = [False]
+    self._flag_map['resnet']['rb2_0/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb2_0/im2col'] = [False]
+    self._flag_map['resnet']['rb2_1/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb2_1/im2col'] = [False]
+    self._flag_map['resnet']['rb3_0/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb3_0/im2col'] = [False, False]
+    self._flag_map['resnet']['rb3_1/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb3_1/im2col'] = [False, False]
+    self._flag_map['resnet']['rb4_0/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb4_0/im2col'] = [False, False]
+    self._flag_map['resnet']['rb4_1/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb4_1/im2col'] = [False]
 
   def reset(self):
     self._sparsity = -1.0
@@ -93,6 +129,24 @@ class MonitoredTensorInfo:
     self._flag_map['alexnet']['pool2'] = [False, False, False, False]
     self._flag_map['alexnet']['conv3'] = [False, False, False]
     self._flag_map['alexnet']['conv4'] = [False, False, False]
+    self._flag_map['resnet'] = collections.OrderedDict()
+    self._flag_map['resnet']['pool1_1'] = [False, False]
+    self._flag_map['resnet']['rb1_0/conv2/im2col'] = [False, False]
+    self._flag_map['resnet']['rb1_0/im2col'] = [False, False]
+    self._flag_map['resnet']['rb1_1/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb1_1/im2col'] = [False]
+    self._flag_map['resnet']['rb2_0/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb2_0/im2col'] = [False]
+    self._flag_map['resnet']['rb2_1/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb2_1/im2col'] = [False]
+    self._flag_map['resnet']['rb3_0/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb3_0/im2col'] = [False, False]
+    self._flag_map['resnet']['rb3_1/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb3_1/im2col'] = [False, False]
+    self._flag_map['resnet']['rb4_0/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb4_0/im2col'] = [False, False]
+    self._flag_map['resnet']['rb4_1/conv2/im2col'] = [False]
+    self._flag_map['resnet']['rb4_1/im2col'] = [False]
 
 class SparsityMonitor:
   def __init__(self, mode, data_format,
@@ -284,20 +338,29 @@ class SparsityMonitor:
         self._sparsity_info[tensor_idx]._fd.close()
 
       # Output data
-      enable_data_file = True 
+      enable_data_file = True
       if enable_data_file:
         # Only deal with the first data within a monitor interval
         tensor_name = self._sparsity_info[tensor_idx]._data_tensor.name
         tensorkey = ''
-        if tensorname_regex.match(tensor_name):
-          tensorkey = tensorname_regex.match(tensor_name).group(1)
+        if model == 'alexnet' or model == 'vggnet':
+          if tensorname_regex.match(tensor_name):
+            tensorkey = tensorname_regex.match(tensor_name).group(1)
+        elif model == 'resnet':
+          tensorkey = tensor_name.split(":")[0]
         if tensorkey == '':
           print("Tensor name unavailable")
           exit()
         sparsities = problem_size_map[model][tensorkey]
         interval_threshold = 0.025
         for i in range(len(sparsities)):
-          sp = sparsities[i]
+          # Im2col increase sparsity a little bit
+          sparsity_increment = 0.05
+          if 'rb4' in tensorkey:
+            sparsity_increment = 0.1
+          elif 'rb1' in tensorkey:
+            sparsity_increment = 0.01
+          sp = sparsities[i]+sparsity_increment
           curr_sp = self._sparsity_info[tensor_idx]._sparsity
           curr_flag = self._sparsity_info[tensor_idx]._flag_map[model][tensorkey][i]
           if not curr_flag:
@@ -309,7 +372,12 @@ class SparsityMonitor:
               col_size = data.shape[3]
               data = np.reshape(data, batch_size*output_h*output_w*col_size)
 
-              file_name = model+'_'+tensorkey+'_'+str(int(sp*100))+'.data'
+              print("Print out: ", tensorkey)
+              print("batch size: ", batch_size)
+              print("output_h: ", output_h)
+              print("output_w: ", output_w)
+              print("col_size: ", col_size)
+              file_name = model+'_'+tensorkey.replace('/', '_')+'_'+str(int(sparsities[i]*100))+'.data'
               #file_name = workpath+'/'+file_name
               if not os.path.isfile(file_name):
                 self._sparsity_info[tensor_idx]._fd = open(file_name, 'w')
