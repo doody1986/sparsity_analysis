@@ -52,7 +52,7 @@ import block_sparsity_util
 
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 FLAGS = tf.app.flags.FLAGS
 

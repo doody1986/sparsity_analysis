@@ -173,7 +173,13 @@ def inference(images):
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 3, 64], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
         conv1_1 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv1_1)
+        #monitored_tensor_list.append(conv1_1)
+        im2col_conv1_1 = tf.extract_image_patches(conv1_1,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='conv1_1')
+        monitored_tensor_list.append(im2col_conv1_1)
 
     # conv 1.2
     with tf.variable_scope('conv1_2') as scope:
@@ -181,80 +187,149 @@ def inference(images):
         pre_activation = tf.nn.conv2d(conv1_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv1_2 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv1_2)
-
+        #im2col_conv1_2 = tf.extract_image_patches(conv1_2,
+        #                                 [1, 2, 2, 1],
+        #                                [1, 2, 2, 1], [1, 1, 1, 1],
+        #                               padding='SAME',
+        #                              name='conv1_2')
+        #monitored_tensor_list.append(im2col_conv1_2)
+        
     # pool1
     pool1 = tf.nn.max_pool2d(conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
-    monitored_tensor_list.append(pool1)
-    
+    #monitored_tensor_list.append(pool1)
+    im2col_pool1 = tf.extract_image_patches(pool1,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='pool1')
+    monitored_tensor_list.append(im2col_pool1)
     # conv 2.1
     with tf.variable_scope('conv2_1') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 64, 128], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool1, kernel, [1, 1, 1, 1], padding='SAME')
         conv2_1 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv2_1)
-
+        #monitored_tensor_list.append(conv2_1)
+        im2col_conv2_1 = tf.extract_image_patches(conv2_1,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='conv2_1')
+        monitored_tensor_list.append(im2col_conv2_1)
     # conv 2.2
     with tf.variable_scope('conv2_2') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 128, 128], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv2_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv2_2 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv2_2)
+        #im2col_conv2_2 = tf.extract_image_patches(conv2_2,
+        #                                [1, 2, 2, 1],
+        #                               [1, 2, 2, 1], [1, 1, 1, 1],
+        #                              padding='SAME',
+        #                             name='conv2_2')
+        #monitored_tensor_list.append(im2col_conv2_2)
 
     # pool2
     pool2 = tf.nn.max_pool2d(conv2_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
-    monitored_tensor_list.append(pool2)
-
+    #monitored_tensor_list.append(pool2)
+    im2col_pool2 = tf.extract_image_patches(pool2,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='pool2')
+    monitored_tensor_list.append(im2col_pool2)
 
     # conv 3.1
     with tf.variable_scope('conv3_1') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 128, 256], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool2, kernel, [1, 1, 1, 1], padding='SAME')
         conv3_1 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv3_1)
-
+        #monitored_tensor_list.append(conv3_1)
+        im2col_conv3_1 = tf.extract_image_patches(conv3_1,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='conv3_1')
+        monitored_tensor_list.append(im2col_conv3_1)
     # conv 3.2
     with tf.variable_scope('conv3_2') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 256], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv3_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv3_2 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv3_2)
-
+        #monitored_tensor_list.append(conv3_2)
+        im2col_conv3_2 = tf.extract_image_patches(conv3_2,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='conv3_2')
+        monitored_tensor_list.append(im2col_conv3_2)
     # conv 3.3
     with tf.variable_scope('conv3_3') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 256], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv3_2, kernel, [1, 1, 1, 1], padding='SAME')
         conv3_3 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv3_3)
+        #im2col_conv3_3 = tf.extract_image_patches(conv3_3,
+        #                               [1, 2, 2, 1],
+        #                                 [1, 2, 2, 1], [1, 1, 1, 1],
+        #                                padding='SAME',
+        #                                name='conv3_3')
+        #monitored_tensor_list.append(im2col_conv3_3)
 
     # pool3
     pool3 = tf.nn.max_pool2d(conv3_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool3')
-    monitored_tensor_list.append(pool3)
-
+    #monitored_tensor_list.append(pool3)
+    im2col_pool3 = tf.extract_image_patches(pool3,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='pool3')
+    monitored_tensor_list.append(im2col_pool3)
     # conv 4.1
     with tf.variable_scope('conv4_1') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool3, kernel, [1, 1, 1, 1], padding='SAME')
         conv4_1 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv4_1)
-
+        #monitored_tensor_list.append(conv4_1)
+        im2col_conv4_1 = tf.extract_image_patches(conv4_1,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='conv4_1')
+        monitored_tensor_list.append(im2col_conv4_1)
     # conv 4.2
     with tf.variable_scope('conv4_2') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv4_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv4_2 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv4_2)
-
+        #monitored_tensor_list.append(conv4_2)
+        im2col_conv4_2 = tf.extract_image_patches(conv4_2,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='conv4_2')
+        monitored_tensor_list.append(im2col_conv4_2)
     # conv 4.3
     with tf.variable_scope('conv4_3') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv4_2, kernel, [1, 1, 1, 1], padding='SAME')
         conv4_3 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv4_3)
+        #im2col_conv4_3 = tf.extract_image_patches(conv4_3,
+        #                                [1, 2, 2, 1],
+        #                                [1, 2, 2, 1], [1, 1, 1, 1],
+        #                                padding='SAME',
+        #                                name='conv4_3')
+        #monitored_tensor_list.append(im2col_conv4_3)
 
     # pool4
     pool4 = tf.nn.max_pool2d(conv4_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool4')
-    monitored_tensor_list.append(pool4)
-
+    #monitored_tensor_list.append(pool4)
+    im2col_pool4 = tf.extract_image_patches(pool4,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='pool4')
+    monitored_tensor_list.append(im2col_pool4)
     # conv 5.1
     with tf.variable_scope('conv5_1') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
@@ -264,26 +339,42 @@ def inference(images):
         #                                 [1, 3, 3, 1],
         #                                 [1, 1, 1, 1], [1, 1, 1, 1],
         #                                 padding='SAME')
-        monitored_tensor_list.append(conv5_1)
-
+        #monitored_tensor_list.append(conv5_1)
+        im2col_conv5_1 = tf.extract_image_patches(conv5_1,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='conv5_1')
+        monitored_tensor_list.append(im2col_conv5_1)
     # conv 5.2
     with tf.variable_scope('conv5_2') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv5_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv5_2 = tf.nn.relu(pre_activation, name="relu")
-        monitored_tensor_list.append(conv5_2)
-
+        #monitored_tensor_list.append(conv5_2)
+        im2col_conv5_2 = tf.extract_image_patches(conv5_2,
+                                         [1, 3, 3, 1],
+                                         [1, 1, 1, 1], [1, 1, 1, 1],
+                                         padding='SAME',
+                                         name='conv5_2')
+        monitored_tensor_list.append(im2col_conv5_2)
     # conv 5.3
     with tf.variable_scope('conv5_3') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv5_2, kernel, [1, 1, 1, 1], padding='SAME')
         conv5_3 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv5_3)
+        #im2col_conv5_3 = tf.extract_image_patches(conv5_3,
+        #                                [1, 2, 2, 1],
+        #                                [1, 2, 2, 1], [1, 1, 1, 1],
+        #                                padding='SAME',
+        #                                name='conv5_3')
+        #monitored_tensor_list.append(im2col_conv5_3)
 
     # pool5
     pool5 = tf.nn.max_pool2d(conv5_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool5')
     monitored_tensor_list.append(pool5)
-
+    
     # dense1
     with tf.variable_scope('dense1') as scope:
         # Move everything into depth so we can perform a single matrix multiply.
