@@ -169,20 +169,23 @@ def inference(images):
     # by replacing all instances of tf.get_variable() with tf.Variable().
     #
     # conv 1.1
-    with tf.compat.v1.variable_scope('conv1_1') as scope:
+    with tf.compat.v1.variable_scope('conv11') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 3, 64], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
         conv1_1 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv1_1)
-        im2col_conv1_1 = tf.extract_image_patches(conv1_1,
+        num_batches_needed = 1
+        sliced_conv1_1 = tf.slice(conv1_1, [0, 0, 0, 0], [num_batches_needed, conv1_1.shape[1], conv1_1.shape[2], conv1_1.shape[3]])
+        im2col_conv1_1 = tf.extract_image_patches(sliced_conv1_1,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
-                                         name='conv1_1')
+                                         name='conv11')
+        print(im2col_conv1_1.name, im2col_conv1_1.shape)
         monitored_tensor_list.append(im2col_conv1_1)
 
     # conv 1.2
-    with tf.variable_scope('conv1_2') as scope:
+    with tf.variable_scope('conv12') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 64, 64], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv1_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv1_2 = tf.nn.relu(pre_activation, name="relu")
@@ -197,26 +200,32 @@ def inference(images):
     # pool1
     pool1 = tf.nn.max_pool2d(conv1_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')
     #monitored_tensor_list.append(pool1)
-    im2col_pool1 = tf.extract_image_patches(pool1,
+    num_batches_needed = 1
+    sliced_pool1 = tf.slice(pool1, [0, 0, 0, 0], [num_batches_needed, pool1.shape[1], pool1.shape[2], pool1.shape[3]])
+    im2col_pool1 = tf.extract_image_patches(sliced_pool1,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
                                          name='pool1')
+    print(im2col_pool1.name, im2col_pool1.shape)
     monitored_tensor_list.append(im2col_pool1)
     # conv 2.1
-    with tf.variable_scope('conv2_1') as scope:
+    with tf.variable_scope('conv21') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 64, 128], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool1, kernel, [1, 1, 1, 1], padding='SAME')
         conv2_1 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv2_1)
-        im2col_conv2_1 = tf.extract_image_patches(conv2_1,
+        num_batches_needed = 1
+        sliced_conv2_1 = tf.slice(conv2_1, [0, 0, 0, 0], [num_batches_needed, conv2_1.shape[1], conv2_1.shape[2], conv2_1.shape[3]])
+        im2col_conv2_1 = tf.extract_image_patches(sliced_conv2_1,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
-                                         name='conv2_1')
+                                         name='conv21')
+        print(im2col_conv2_1.name, im2col_conv2_1.shape)
         monitored_tensor_list.append(im2col_conv2_1)
     # conv 2.2
-    with tf.variable_scope('conv2_2') as scope:
+    with tf.variable_scope('conv22') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 128, 128], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv2_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv2_2 = tf.nn.relu(pre_activation, name="relu")
@@ -231,39 +240,48 @@ def inference(images):
     # pool2
     pool2 = tf.nn.max_pool2d(conv2_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
     #monitored_tensor_list.append(pool2)
-    im2col_pool2 = tf.extract_image_patches(pool2,
+    num_batches_needed = 4
+    sliced_pool2 = tf.slice(pool2, [0, 0, 0, 0], [num_batches_needed, pool2.shape[1], pool2.shape[2], pool2.shape[3]])
+    im2col_pool2 = tf.extract_image_patches(sliced_pool2,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
                                          name='pool2')
+    print(im2col_pool2.name, im2col_pool2.shape)
     monitored_tensor_list.append(im2col_pool2)
 
     # conv 3.1
-    with tf.variable_scope('conv3_1') as scope:
+    with tf.variable_scope('conv31') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 128, 256], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool2, kernel, [1, 1, 1, 1], padding='SAME')
         conv3_1 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv3_1)
-        im2col_conv3_1 = tf.extract_image_patches(conv3_1,
+        num_batches_needed = 4
+        sliced_conv3_1 = tf.slice(conv3_1, [0, 0, 0, 0], [num_batches_needed, conv3_1.shape[1], conv3_1.shape[2], conv3_1.shape[3]])
+        im2col_conv3_1 = tf.extract_image_patches(sliced_conv3_1,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
-                                         name='conv3_1')
+                                         name='conv31')
+        print(im2col_conv3_1.name, im2col_conv3_1.shape)
         monitored_tensor_list.append(im2col_conv3_1)
     # conv 3.2
-    with tf.variable_scope('conv3_2') as scope:
+    with tf.variable_scope('conv32') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 256], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv3_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv3_2 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv3_2)
-        im2col_conv3_2 = tf.extract_image_patches(conv3_2,
+        num_batches_needed = 4
+        sliced_conv3_2 = tf.slice(conv3_2, [0, 0, 0, 0], [num_batches_needed, conv3_2.shape[1], conv3_2.shape[2], conv3_2.shape[3]])
+        im2col_conv3_2 = tf.extract_image_patches(sliced_conv3_2,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
-                                         name='conv3_2')
+                                         name='conv32')
+        print(im2col_conv3_2.name, im2col_conv3_2.shape)
         monitored_tensor_list.append(im2col_conv3_2)
     # conv 3.3
-    with tf.variable_scope('conv3_3') as scope:
+    with tf.variable_scope('conv33') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 256], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv3_2, kernel, [1, 1, 1, 1], padding='SAME')
         conv3_3 = tf.nn.relu(pre_activation, name="relu")
@@ -278,38 +296,47 @@ def inference(images):
     # pool3
     pool3 = tf.nn.max_pool2d(conv3_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool3')
     #monitored_tensor_list.append(pool3)
-    im2col_pool3 = tf.extract_image_patches(pool3,
+    num_batches_needed = 16
+    sliced_pool3 = tf.slice(pool3, [0, 0, 0, 0], [num_batches_needed, pool3.shape[1], pool3.shape[2], pool3.shape[3]])
+    im2col_pool3 = tf.extract_image_patches(sliced_pool3,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
                                          name='pool3')
+    print(im2col_pool3.name, im2col_pool3.shape)
     monitored_tensor_list.append(im2col_pool3)
     # conv 4.1
-    with tf.variable_scope('conv4_1') as scope:
+    with tf.variable_scope('conv41') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool3, kernel, [1, 1, 1, 1], padding='SAME')
         conv4_1 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv4_1)
-        im2col_conv4_1 = tf.extract_image_patches(conv4_1,
+        num_batches_needed = 16
+        sliced_conv4_1 = tf.slice(conv4_1, [0, 0, 0, 0], [num_batches_needed, conv4_1.shape[1], conv4_1.shape[2], conv4_1.shape[3]])
+        im2col_conv4_1 = tf.extract_image_patches(sliced_conv4_1,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
-                                         name='conv4_1')
+                                         name='conv41')
+        print(im2col_conv4_1.name, im2col_conv4_1.shape)
         monitored_tensor_list.append(im2col_conv4_1)
     # conv 4.2
-    with tf.variable_scope('conv4_2') as scope:
+    with tf.variable_scope('conv42') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv4_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv4_2 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv4_2)
-        im2col_conv4_2 = tf.extract_image_patches(conv4_2,
+        num_batches_needed = 16
+        sliced_conv4_2 = tf.slice(conv4_2, [0, 0, 0, 0], [num_batches_needed, conv4_2.shape[1], conv4_2.shape[2], conv4_2.shape[3]])
+        im2col_conv4_2 = tf.extract_image_patches(sliced_conv4_2,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
-                                         name='conv4_2')
+                                         name='conv42')
+        print(im2col_conv4_2.name, im2col_conv4_2.shape)
         monitored_tensor_list.append(im2col_conv4_2)
     # conv 4.3
-    with tf.variable_scope('conv4_3') as scope:
+    with tf.variable_scope('conv43') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv4_2, kernel, [1, 1, 1, 1], padding='SAME')
         conv4_3 = tf.nn.relu(pre_activation, name="relu")
@@ -324,14 +351,17 @@ def inference(images):
     # pool4
     pool4 = tf.nn.max_pool2d(conv4_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool4')
     #monitored_tensor_list.append(pool4)
-    im2col_pool4 = tf.extract_image_patches(pool4,
+    num_batches_needed = 64
+    sliced_pool4 = tf.slice(pool4, [0, 0, 0, 0], [num_batches_needed, pool4.shape[1], pool4.shape[2], pool4.shape[3]])
+    im2col_pool4 = tf.extract_image_patches(sliced_pool4,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
                                          name='pool4')
+    print(im2col_pool4.name, im2col_pool4.shape)
     monitored_tensor_list.append(im2col_pool4)
     # conv 5.1
-    with tf.variable_scope('conv5_1') as scope:
+    with tf.variable_scope('conv51') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool4, kernel, [1, 1, 1, 1], padding='SAME')
         conv5_1 = tf.nn.relu(pre_activation, name="relu")
@@ -340,26 +370,32 @@ def inference(images):
         #                                 [1, 1, 1, 1], [1, 1, 1, 1],
         #                                 padding='SAME')
         #monitored_tensor_list.append(conv5_1)
-        im2col_conv5_1 = tf.extract_image_patches(conv5_1,
+        num_batches_needed = 64
+        sliced_conv5_1 = tf.slice(conv5_1, [0, 0, 0, 0], [num_batches_needed, conv5_1.shape[1], conv5_1.shape[2], conv5_1.shape[3]])
+        im2col_conv5_1 = tf.extract_image_patches(sliced_conv5_1,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
-                                         name='conv5_1')
+                                         name='conv51')
+        print(im2col_conv5_1.name, im2col_conv5_1.shape)
         monitored_tensor_list.append(im2col_conv5_1)
     # conv 5.2
-    with tf.variable_scope('conv5_2') as scope:
+    with tf.variable_scope('conv52') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv5_1, kernel, [1, 1, 1, 1], padding='SAME')
         conv5_2 = tf.nn.relu(pre_activation, name="relu")
         #monitored_tensor_list.append(conv5_2)
-        im2col_conv5_2 = tf.extract_image_patches(conv5_2,
+        num_batches_needed = 64
+        sliced_conv5_2 = tf.slice(conv5_2, [0, 0, 0, 0], [num_batches_needed, conv5_2.shape[1], conv5_2.shape[2], conv5_2.shape[3]])
+        im2col_conv5_2 = tf.extract_image_patches(sliced_conv5_2,
                                          [1, 3, 3, 1],
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME',
-                                         name='conv5_2')
+                                         name='conv52')
+        print(im2col_conv5_2.name, im2col_conv5_2.shape)
         monitored_tensor_list.append(im2col_conv5_2)
     # conv 5.3
-    with tf.variable_scope('conv5_3') as scope:
+    with tf.variable_scope('conv53') as scope:
         kernel = _variable_with_weight_decay('weights', shape=[3, 3, 512, 512], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv5_2, kernel, [1, 1, 1, 1], padding='SAME')
         conv5_3 = tf.nn.relu(pre_activation, name="relu")
@@ -373,7 +409,7 @@ def inference(images):
 
     # pool5
     pool5 = tf.nn.max_pool2d(conv5_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool5')
-    monitored_tensor_list.append(pool5)
+    #monitored_tensor_list.append(pool5)
     
     # dense1
     with tf.variable_scope('dense1') as scope:
@@ -383,7 +419,7 @@ def inference(images):
         weights = _variable_with_weight_decay('weights', shape=[dim, 4096], stddev=np.sqrt(1/float(dim)), wd=0.004, isconv=False)
         biases = _variable_on_cpu('biases', [4096], tf.constant_initializer(0.0))
         dense1 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name="relu")
-        monitored_tensor_list.append(dense1)
+        #monitored_tensor_list.append(dense1)
         
 
     # dense2

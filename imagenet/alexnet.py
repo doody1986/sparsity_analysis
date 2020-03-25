@@ -182,6 +182,7 @@ def inference(images):
                                          padding='SAME',
                                          name='pool1')
     monitored_tensor_list.append(im2col_pool1)
+    print(im2col_pool1.shape)
     #monitored_tensor_list.append(pool1)
 
     # conv 2
@@ -198,11 +199,12 @@ def inference(images):
                                          [1, 1, 1, 1], [1, 1, 1, 1],
                                          padding='SAME', name='pool2')
     monitored_tensor_list.append(im2col_pool2)
+    print(im2col_pool2.shape)
     #monitored_tensor_list.append(pool2)
     
     # conv 3
     with tf.variable_scope('conv3') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 256], stddev=5e-2, wd=WEIGHT_DECAY)
+        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 384], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(pool2, kernel, [1, 1, 1, 1], padding='SAME')
         conv3 = tf.nn.relu(pre_activation, name="relu")
         im2col_conv3 = tf.extract_image_patches(conv3,
@@ -210,11 +212,12 @@ def inference(images):
                                              [1, 1, 1, 1], [1, 1, 1, 1],
                                              padding='SAME', name='conv3')
         monitored_tensor_list.append(im2col_conv3)
+        print(im2col_conv3.shape)
         #monitored_tensor_list.append(conv3)
 
     # conv 4
     with tf.variable_scope('conv4') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 256, 384], stddev=5e-2, wd=WEIGHT_DECAY)
+        kernel = _variable_with_weight_decay('weights', shape=[3, 3, 384, 384], stddev=5e-2, wd=WEIGHT_DECAY)
         pre_activation = tf.nn.conv2d(conv3, kernel, [1, 1, 1, 1], padding='SAME')
         conv4 = tf.nn.relu(pre_activation, name="relu")
         im2col_conv4 = tf.extract_image_patches(conv4,
@@ -222,6 +225,7 @@ def inference(images):
                                              [1, 1, 1, 1], [1, 1, 1, 1],
                                              padding='SAME', name='conv4')
         monitored_tensor_list.append(im2col_conv4)
+        print(im2col_conv4.shape)
         #monitored_tensor_list.append(conv4)
 
     # conv 5
